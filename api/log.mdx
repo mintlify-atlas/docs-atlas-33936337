@@ -50,6 +50,356 @@ public static var logger: LogManager
   The shared singleton `LogManager` instance
 </ResponseField>
 
+## Static methods
+
+The `Log` struct provides static convenience methods for all log levels. These are the primary API for quick logging throughout your application. Each method automatically captures source location and allows an optional category parameter.
+
+<Note>
+  The `category` parameter is optional. If omitted, it defaults to the calling file's ID (`#fileID`).
+</Note>
+
+### Log.trace(_:category:fileID:function:file:line:)
+
+Logs a trace message for detailed execution flow tracking.
+
+```swift
+static func trace(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+#### Example
+
+```swift
+Log.trace("Entering method processData()", category: .init("DataProcessor"))
+```
+
+### Log.debug(_:category:fileID:function:file:line:)
+
+Logs a debug message for development and troubleshooting.
+
+```swift
+static func debug(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+#### Example
+
+```swift
+Log.debug("Cache hit for key: user_123", category: .init("Cache"))
+```
+
+### Log.print(_:category:fileID:function:file:line:)
+
+Logs a print-level message as a structured replacement for `Swift.print()`.
+
+```swift
+static func print(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.info(_:category:fileID:function:file:line:)
+
+Logs an informational message about general app state or events.
+
+```swift
+static func info(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+#### Example
+
+```swift
+Log.info("User signed in", category: .init("Auth"))
+```
+
+### Log.notice(_:category:fileID:function:file:line:)
+
+Logs a notice about a notable but non-critical event.
+
+```swift
+static func notice(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.warn(_:category:fileID:function:file:line:)
+
+Logs a warning about a potential issue that doesn't prevent operation.
+
+```swift
+static func warn(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+#### Example
+
+```swift
+Log.warn("API response took longer than expected", category: .init("Network"))
+```
+
+### Log.error(_:category:fileID:function:file:line:)
+
+Logs an error that occurred but was handled.
+
+```swift
+static func error(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+#### Example
+
+```swift
+Log.error("Failed to decode JSON response", category: .init("API"))
+```
+
+### Log.fatal(_:category:fileID:function:file:line:)
+
+Logs a fatal error that may cause app termination or severe malfunction.
+
+```swift
+static func fatal(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.success(_:category:fileID:function:file:line:)
+
+Logs a successful operation or outcome.
+
+```swift
+static func success(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+#### Example
+
+```swift
+Log.success("Profile updated successfully", category: .init("Profile"))
+```
+
+### Log.done(_:category:fileID:function:file:line:)
+
+Logs task or operation completion.
+
+```swift
+static func done(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.network(_:category:fileID:function:file:line:)
+
+Logs network-related activity.
+
+```swift
+static func network(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.api(_:category:fileID:function:file:line:)
+
+Logs API call activity (requests, responses, errors).
+
+```swift
+static func api(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+#### Example
+
+```swift
+Log.api("GET /v1/users/123", category: .init("APIClient"))
+```
+
+### Log.security(_:category:fileID:function:file:line:)
+
+Logs security-related events (encryption, permissions, access control).
+
+```swift
+static func security(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.auth(_:category:fileID:function:file:line:)
+
+Logs authentication events (login, logout, token refresh).
+
+```swift
+static func auth(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.metric(_:category:fileID:function:file:line:)
+
+Logs performance metrics (timing, memory, resource usage).
+
+```swift
+static func metric(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.analytics(_:category:fileID:function:file:line:)
+
+Logs analytics events (user behavior, feature usage).
+
+```swift
+static func analytics(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.ui(_:category:fileID:function:file:line:)
+
+Logs UI events (view lifecycle, layout, rendering).
+
+```swift
+static func ui(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.user(_:category:fileID:function:file:line:)
+
+Logs user actions (taps, gestures, input).
+
+```swift
+static func user(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.database(_:category:fileID:function:file:line:)
+
+Logs database operations (queries, transactions, migrations).
+
+```swift
+static func database(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+### Log.storage(_:category:fileID:function:file:line:)
+
+Logs storage operations (file I/O, cache, persistence).
+
+```swift
+static func storage(
+    _ message: String,
+    category: LogCategory? = nil,
+    fileID: String = #fileID,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
 ## Instance properties
 
 ### category
