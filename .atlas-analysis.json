@@ -1,0 +1,104 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Scribe",
+  "projectDescription": "A lightweight, thread-safe logging package for Swift apps using os.log under the hood",
+  "theme": "palm",
+  "primaryColor": "#007AFF",
+  "lightColor": "#5AC8FA",
+  "darkColor": "#0051D5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/log-levels",
+              "concepts/categories",
+              "concepts/configuration"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/basic-logging",
+              "guides/loggable-macro",
+              "guides/sinks-and-streams",
+              "guides/filtering",
+              "guides/custom-formatting"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/threading",
+              "advanced/performance",
+              "advanced/testing",
+              "advanced/best-practices"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Types",
+            "pages": [
+              "api/log",
+              "api/log-manager",
+              "api/log-level",
+              "api/log-category",
+              "api/log-configuration"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "api/log-subscription",
+              "api/loggable-macro"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Thread-safe async logging via dedicated queue",
+    "Granular log levels with emoji-first output",
+    "Category-based filtering and organization",
+    "Pluggable sinks for custom log destinations",
+    "@Loggable macro for automatic logger generation",
+    "Custom formatting support",
+    "AsyncStream integration for modern Swift",
+    "Native os.log integration with OSLogType mapping"
+  ],
+  "publicApiSurface": [
+    "Log",
+    "LogManager",
+    "LogLevel",
+    "LogCategory",
+    "LogConfiguration",
+    "LogSubscription",
+    "@Loggable",
+    "Log.debug(_:category:)",
+    "Log.info(_:category:)",
+    "Log.warn(_:category:)",
+    "Log.error(_:category:)",
+    "Log.success(_:category:)",
+    "LogManager.shared",
+    "LogManager.minimumLevel",
+    "LogManager.configuration",
+    "LogManager.addSink(categories:_:)",
+    "LogManager.stream(categories:)"
+  ]
+}
