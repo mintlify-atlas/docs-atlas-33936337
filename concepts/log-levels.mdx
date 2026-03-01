@@ -1,0 +1,343 @@
+---
+title: Log levels
+description: Understanding Scribe's log level system, families, and filtering
+---
+
+Log levels in Scribe represent the severity and domain of a log message. They're organized into families for logical grouping and include emoji indicators, short codes, and OS log type mappings.
+
+## Available log levels
+
+Scribe provides 20 distinct log levels organized into 9 families:
+
+### Development
+
+<ParamField path="trace" type="LogLevel">
+  🔬 Detailed debugging for tracing execution flow (raw value: 0)
+</ParamField>
+
+<ParamField path="debug" type="LogLevel">
+  🔍 Debug information for development (raw value: 1)
+</ParamField>
+
+<ParamField path="print" type="LogLevel">
+  📝 Standard print replacement with structured output (raw value: 2)
+</ParamField>
+
+### General information
+
+<ParamField path="info" type="LogLevel">
+  ℹ️ General informational messages (raw value: 10)
+</ParamField>
+
+<ParamField path="notice" type="LogLevel">
+  📢 Notable events worth attention (raw value: 11)
+</ParamField>
+
+### Problems
+
+<ParamField path="warning" type="LogLevel">
+  ⚠️ Warning about potential issues (raw value: 20)
+</ParamField>
+
+<ParamField path="error" type="LogLevel">
+  ❌ Error that was handled (raw value: 21)
+</ParamField>
+
+<ParamField path="fatal" type="LogLevel">
+  💥 Fatal error causing severe malfunction (raw value: 22)
+</ParamField>
+
+### Success
+
+<ParamField path="success" type="LogLevel">
+  ✅ Successful operation (raw value: 30)
+</ParamField>
+
+<ParamField path="done" type="LogLevel">
+  ✨ Task or operation completion (raw value: 31)
+</ParamField>
+
+### Networking
+
+<ParamField path="network" type="LogLevel">
+  🌐 Network-related activity (raw value: 40)
+</ParamField>
+
+<ParamField path="api" type="LogLevel">
+  🚀 API call activity (raw value: 41)
+</ParamField>
+
+### Security
+
+<ParamField path="security" type="LogLevel">
+  🔒 Security-related events (raw value: 50)
+</ParamField>
+
+<ParamField path="auth" type="LogLevel">
+  🔑 Authentication events (raw value: 51)
+</ParamField>
+
+### Performance
+
+<ParamField path="metric" type="LogLevel">
+  📊 Performance metrics (raw value: 60)
+</ParamField>
+
+<ParamField path="analytics" type="LogLevel">
+  📈 Analytics events (raw value: 61)
+</ParamField>
+
+### UI
+
+<ParamField path="ui" type="LogLevel">
+  🎨 UI events (raw value: 70)
+</ParamField>
+
+<ParamField path="user" type="LogLevel">
+  👤 User actions (raw value: 71)
+</ParamField>
+
+### Data
+
+<ParamField path="database" type="LogLevel">
+  💾 Database operations (raw value: 80)
+</ParamField>
+
+<ParamField path="storage" type="LogLevel">
+  📦 Storage operations (raw value: 81)
+</ParamField>
+
+## Display properties
+
+Each log level has multiple display representations:
+
+```swift
+let level = LogLevel.error
+
+print(level.emoji)      // "❌"
+print(level.name)       // "error"
+print(level.shortCode)  // "ERR"
+print(level.description) // "❌ ERROR"
+```
+
+### Properties
+
+- `emoji`: Emoji indicator for visual identification
+- `name`: Human-readable lowercase name
+- `shortCode`: Three-character uppercase code for compact display
+- `description`: Formatted string with emoji and uppercase name
+
+## Level families
+
+Log levels are grouped into families for easier filtering and organization:
+
+```swift
+public enum Family {
+    case development  // trace, debug, print
+    case general      // info, notice
+    case problems     // warning, error, fatal
+    case success      // success, done
+    case networking   // network, api
+    case security     // security, auth
+    case performance  // metric, analytics
+    case ui           // ui, user
+    case data         // database, storage
+}
+```
+
+### Getting levels by family
+
+```swift
+// Get all networking levels
+let networkingLevels = LogLevel.levels(in: .networking)
+// Returns: [.network, .api]
+
+// Get all problem levels
+let problemLevels = LogLevel.levels(in: .problems)
+// Returns: [.warning, .error, .fatal]
+
+// List all families
+let allFamilies = LogLevel.families()
+```
+
+## Predefined level sets
+
+Scribe provides convenient predefined sets for common filtering scenarios:
+
+```swift
+// Error and fatal levels
+LogLevel.allSevere // [.error, .fatal]
+
+// Warning only
+LogLevel.allWarnings // [.warning]
+
+// All problems (warnings + errors + fatal)
+LogLevel.allProblems // [.warning, .error, .fatal]
+
+// Success levels
+LogLevel.allSuccess // [.success, .done]
+
+// Network levels
+LogLevel.allNetwork // [.network, .api]
+
+// Security levels
+LogLevel.allSecurity // [.security, .auth]
+
+// Performance tracking
+LogLevel.allPerformance // [.metric, .analytics]
+
+// UI-related
+LogLevel.allUI // [.ui, .user]
+
+// Data operations
+LogLevel.allData // [.database, .storage]
+
+// Verbose levels (typically filtered in production)
+LogLevel.noisyLevels // [.trace, .debug, .print]
+```
+
+## Comparing levels
+
+`LogLevel` conforms to `Comparable`, allowing direct comparison based on raw values:
+
+```swift
+if currentLevel >= .warning {
+    // Handle warnings and above
+}
+
+// Get all levels at or above a threshold
+let productionLevels = LogLevel.levels(minimum: .info)
+// Returns: [.info, .notice, .warning, .error, .fatal, ...]
+```
+
+<Note>
+  Levels are compared by their raw values. Lower values represent less severe/verbose levels.
+</Note>
+
+## Parsing levels from strings
+
+Parse log levels from strings using level names, short codes, or emojis:
+
+```swift
+// From level name
+LogLevel.parse("error")    // .error
+LogLevel.parse("warning")  // .warning
+
+// From short code
+LogLevel.parse("ERR")      // .error
+LogLevel.parse("wrn")      // .warning (case insensitive)
+
+// From emoji
+LogLevel.parse("❌")        // .error
+LogLevel.parse("⚠️")        // .warning
+
+// Returns nil if not found
+LogLevel.parse("invalid")  // nil
+```
+
+## OS log integration
+
+Each log level maps to an appropriate `OSLogType` for integration with Apple's unified logging system:
+
+```swift
+let level = LogLevel.error
+let osType = level.osLogType  // .error
+```
+
+### Mapping table
+
+| Log Level | OSLogType |
+|-----------|----------|
+| trace, debug, print | `.debug` |
+| info, notice, success, done | `.info` |
+| warning, network, api, security, auth, metric, analytics, ui, user, database, storage | `.default` |
+| error | `.error` |
+| fatal | `.fault` |
+
+## Usage examples
+
+### Basic logging with different levels
+
+```swift
+import Scribe
+
+extension LogCategory {
+    static let app = LogCategory("App")
+}
+
+// Development
+Log.trace("Entering function", category: .app)
+Log.debug("Variable value: \(value)", category: .app)
+Log.print("Quick debug output", category: .app)
+
+// Information
+Log.info("App started", category: .app)
+Log.notice("Configuration loaded", category: .app)
+
+// Problems
+Log.warn("Low memory warning", category: .app)
+Log.error("Failed to save data", category: .app)
+Log.fatal("Critical system failure", category: .app)
+
+// Success
+Log.success("Data saved successfully", category: .app)
+Log.done("Migration completed", category: .app)
+```
+
+### Filtering by minimum level
+
+```swift
+// Only log warnings and above in production
+LogManager.shared.minimumLevel = .warning
+
+// These won't be logged:
+Log.debug("Debug info", category: .app)
+Log.info("Info message", category: .app)
+
+// These will be logged:
+Log.warn("Warning message", category: .app)
+Log.error("Error message", category: .app)
+```
+
+### Working with families
+
+```swift
+// Filter development logs in production
+#if DEBUG
+    LogManager.shared.minimumLevel = .trace
+#else
+    // Skip all development family logs
+    LogManager.shared.minimumLevel = .info
+#endif
+
+// Check if a level belongs to a family
+if LogLevel.error.family == .problems {
+    // Handle problem logs specially
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use appropriate levels" icon="layer-group">
+    Choose the level that best represents the severity and domain of your message
+  </Card>
+  
+  <Card title="Filter in production" icon="filter">
+    Set `minimumLevel` to `.info` or higher in production to reduce log volume
+  </Card>
+  
+  <Card title="Leverage families" icon="users">
+    Use `LogLevel.levels(in:)` to filter by domain (networking, security, etc.)
+  </Card>
+  
+  <Card title="Use predefined sets" icon="list">
+    Utilize `allProblems`, `noisyLevels`, and other sets for common filtering scenarios
+  </Card>
+</CardGroup>
+
+## See also
+
+- [Categories](/concepts/categories) - Organize logs by feature or module
+- [Configuration](/concepts/configuration) - Customize log output and filtering
+- [Quick start](/quickstart) - Get started with basic logging

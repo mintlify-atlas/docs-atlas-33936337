@@ -1,0 +1,420 @@
+---
+title: LogConfiguration
+description: Configuration options for the logging system
+---
+
+## Overview
+
+The `LogConfiguration` struct provides configuration options for the logging system. Use this struct to customize log formatting, category filtering, and timestamp display.
+
+```swift
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: true,
+    includeShortCode: false
+)
+LogManager.shared.configuration = config
+```
+
+## Initialization
+
+### init(enabledCategories:includeTimestamp:includeEmoji:includeShortCode:includeFileAndLineNumber:autoLoggerCacheLimit:dateFormat:)
+
+Creates a configuration that uses the built-in formatter options.
+
+```swift
+public init(
+    enabledCategories: Set<LogCategory>? = nil,
+    includeTimestamp: Bool = true,
+    includeEmoji: Bool = true,
+    includeShortCode: Bool = false,
+    includeFileAndLineNumber: Bool = true,
+    autoLoggerCacheLimit: Int? = 100,
+    dateFormat: String = "yyyy-MM-dd HH:mm:ss.SSSZ"
+)
+```
+
+<ParamField path="enabledCategories" type="Set<LogCategory>?" default="nil">
+  Categories to include. Pass `nil` to allow all categories.
+</ParamField>
+
+<ParamField path="includeTimestamp" type="Bool" default="true">
+  Whether to include timestamps in log output
+</ParamField>
+
+<ParamField path="includeEmoji" type="Bool" default="true">
+  Whether to include the level emoji in log output
+</ParamField>
+
+<ParamField path="includeShortCode" type="Bool" default="false">
+  Whether to include the level short code (e.g., `[DBG]`) in log output
+</ParamField>
+
+<ParamField path="includeFileAndLineNumber" type="Bool" default="true">
+  Whether to include the file and line number in the format: [file]:[line number]
+</ParamField>
+
+<ParamField path="autoLoggerCacheLimit" type="Int?" default="100">
+  Maximum number of cached auto-generated `Logger` instances. Pass `nil` for no limit.
+</ParamField>
+
+<ParamField path="dateFormat" type="String" default="yyyy-MM-dd HH:mm:ss.SSSZ">
+  Timestamp format string for dates
+</ParamField>
+
+#### Example
+
+```swift
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: false,
+    includeShortCode: true,
+    includeFileAndLineNumber: false
+)
+LogManager.shared.configuration = config
+```
+
+### init(enabledCategories:formatter:autoLoggerCacheLimit:)
+
+Creates a configuration that uses a custom formatter closure.
+
+The built-in formatting toggles (timestamps, emoji, short codes) are ignored when a custom formatter is set.
+
+```swift
+public init(
+    enabledCategories: Set<LogCategory>? = nil,
+    formatter: @escaping @Sendable (FormatterContext) -> String,
+    autoLoggerCacheLimit: Int? = 100
+)
+```
+
+<ParamField path="enabledCategories" type="Set<LogCategory>?" default="nil">
+  Categories to include. Pass `nil` to allow all categories.
+</ParamField>
+
+<ParamField path="formatter" type="(FormatterContext) -> String" required>
+  Custom formatter closure used to build the final log line
+</ParamField>
+
+<ParamField path="autoLoggerCacheLimit" type="Int?" default="100">
+  Maximum number of cached auto-generated `Logger` instances. Pass `nil` for no limit.
+</ParamField>
+
+#### Example
+
+```swift
+let config = LogConfiguration { context in
+    "[\(context.level.shortCode)] \(context.category.name): \(context.message)"
+}
+LogManager.shared.configuration = config
+```
+
+## Properties
+
+### enabledCategories
+
+Categories to include in logging output. `nil` allows all categories.
+
+```swift
+public var enabledCategories: Set<LogCategory>?
+```
+
+<ResponseField name="enabledCategories" type="Set<LogCategory>?">
+  The set of categories to log, or `nil` for all categories
+</ResponseField>
+
+#### Example
+
+```swift
+extension LogCategory {
+    static let auth = LogCategory("Auth")
+    static let network = LogCategory("Network")
+}
+
+var config = LogManager.shared.configuration
+config.enabledCategories = [.auth, .network]
+LogManager.shared.configuration = config
+```
+
+### formatter
+
+Custom formatter closure for complete control over log line format.
+
+```swift
+public var formatter: (@Sendable (FormatterContext) -> String)?
+```
+
+<ResponseField name="formatter" type="((FormatterContext) -> String)?">
+  Optional custom formatting closure
+</ResponseField>
+
+#### Example
+
+```swift
+var config = LogManager.shared.configuration
+config.formatter = { context in
+    let timestamp = ISO8601DateFormatter().string(from: context.timestamp)
+    return "\(timestamp) | \(context.level.emoji) | \(context.message)"
+}
+LogManager.shared.configuration = config
+```
+
+### includeTimestamp
+
+Whether to include timestamps in log output. Default is `true`.
+
+This flag only affects the built-in formatter. When a custom formatter is provided, the formatter is responsible for rendering any timestamp.
+
+```swift
+public var includeTimestamp: Bool
+```
+
+<ResponseField name="includeTimestamp" type="Bool">
+  Whether timestamps are included in formatted logs
+</ResponseField>
+
+#### Example
+
+```swift
+var config = LogManager.shared.configuration
+config.includeTimestamp = false
+LogManager.shared.configuration = config
+```
+
+### includeEmoji
+
+Whether to include the level emoji in log output. Default is `true`.
+
+Only used by the built-in formatter.
+
+```swift
+public var includeEmoji: Bool
+```
+
+<ResponseField name="includeEmoji" type="Bool">
+  Whether level emojis are included in formatted logs
+</ResponseField>
+
+#### Example
+
+```swift
+var config = LogManager.shared.configuration
+config.includeEmoji = false
+LogManager.shared.configuration = config
+```
+
+### includeShortCode
+
+Whether to include the level short code (e.g., `[DBG]`) in log output. Default is `false`.
+
+Only used by the built-in formatter.
+
+```swift
+public var includeShortCode: Bool
+```
+
+<ResponseField name="includeShortCode" type="Bool">
+  Whether short codes are included in formatted logs
+</ResponseField>
+
+#### Example
+
+```swift
+var config = LogManager.shared.configuration
+config.includeShortCode = true
+LogManager.shared.configuration = config
+// Logs will now include: [DBG], [INF], [ERR], etc.
+```
+
+### includeFileAndLineNumber
+
+Whether to include the file and line number in the format: [file]:[line number].
+
+Only used by the built-in formatter.
+
+```swift
+public var includeFileAndLineNumber: Bool
+```
+
+<ResponseField name="includeFileAndLineNumber" type="Bool">
+  Whether file and line numbers are included in formatted logs
+</ResponseField>
+
+#### Example
+
+```swift
+var config = LogManager.shared.configuration
+config.includeFileAndLineNumber = true
+LogManager.shared.configuration = config
+// Logs will include: — ViewModel.swift:42
+```
+
+### autoLoggerCacheLimit
+
+Maximum number of cached auto-generated `Logger` instances (e.g., categories from `#fileID`). `nil` means unbounded. Default is 100.
+
+```swift
+public var autoLoggerCacheLimit: Int?
+```
+
+<ResponseField name="autoLoggerCacheLimit" type="Int?">
+  The cache limit, or `nil` for unlimited caching
+</ResponseField>
+
+#### Example
+
+```swift
+var config = LogManager.shared.configuration
+config.autoLoggerCacheLimit = 50 // Limit to 50 cached loggers
+LogManager.shared.configuration = config
+```
+
+### dateFormat
+
+Date format string for timestamps. Default is `"yyyy-MM-dd HH:mm:ss.SSSZ"`.
+
+Only used by the built-in formatter.
+
+```swift
+public var dateFormat: String
+```
+
+<ResponseField name="dateFormat" type="String">
+  The date format string used by DateFormatter
+</ResponseField>
+
+#### Example
+
+```swift
+var config = LogManager.shared.configuration
+config.dateFormat = "HH:mm:ss.SSS" // Show only time
+LogManager.shared.configuration = config
+```
+
+## FormatterContext
+
+Provides all contextual information needed by a custom log formatter.
+
+```swift
+public struct FormatterContext: Sendable {
+    public let level: LogLevel
+    public let category: LogCategory
+    public let message: String
+    public let file: String
+    public let line: Int
+    public let timestamp: Date
+}
+```
+
+<ResponseField name="level" type="LogLevel">
+  The severity/type of the log message
+</ResponseField>
+
+<ResponseField name="category" type="LogCategory">
+  The category for filtering and grouping
+</ResponseField>
+
+<ResponseField name="message" type="String">
+  The log message content
+</ResponseField>
+
+<ResponseField name="file" type="String">
+  The source file path
+</ResponseField>
+
+<ResponseField name="line" type="Int">
+  The source line number
+</ResponseField>
+
+<ResponseField name="timestamp" type="Date">
+  When the log was created
+</ResponseField>
+
+### Example
+
+```swift
+let config = LogConfiguration { context in
+    let time = DateFormatter.localizedString(from: context.timestamp, dateStyle: .none, timeStyle: .medium)
+    let fileName = (context.file as NSString).lastPathComponent
+    return "\(time) [\(context.category.name)] \(context.level.emoji) \(context.message) (\(fileName):\(context.line))"
+}
+LogManager.shared.configuration = config
+```
+
+## Static properties
+
+### default
+
+Default configuration with timestamps enabled and all categories allowed.
+
+```swift
+public static var `default`: LogConfiguration
+```
+
+<ResponseField name="default" type="LogConfiguration">
+  A default configuration instance
+</ResponseField>
+
+#### Example
+
+```swift
+LogManager.shared.configuration = .default
+```
+
+## Common configuration examples
+
+### Minimal output
+
+```swift
+let config = LogConfiguration(
+    includeTimestamp: false,
+    includeEmoji: false,
+    includeShortCode: false,
+    includeFileAndLineNumber: false
+)
+LogManager.shared.configuration = config
+```
+
+### Production configuration
+
+```swift
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: false,
+    includeShortCode: true,
+    includeFileAndLineNumber: true
+)
+LogManager.shared.minimumLevel = .info
+LogManager.shared.configuration = config
+```
+
+### Development configuration
+
+```swift
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: true,
+    includeShortCode: false,
+    includeFileAndLineNumber: true
+)
+LogManager.shared.minimumLevel = .debug
+LogManager.shared.configuration = config
+```
+
+### JSON formatter
+
+```swift
+let config = LogConfiguration { context in
+    let json: [String: Any] = [
+        "level": context.level.name,
+        "category": context.category.name,
+        "message": context.message,
+        "file": context.file,
+        "line": context.line,
+        "timestamp": ISO8601DateFormatter().string(from: context.timestamp)
+    ]
+    let data = try? JSONSerialization.data(withJSONObject: json)
+    return data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+}
+LogManager.shared.configuration = config
+```

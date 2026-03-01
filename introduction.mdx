@@ -1,0 +1,160 @@
+---
+title: Introduction
+description: A lightweight, thread-safe logging package for Swift apps using os.log under the hood
+---
+
+## Meet Scribe
+
+Scribe is a lightweight, thread-safe logging package for Swift apps that brings clarity and ergonomics to your logging workflow. Built on top of Apple's os.log, it delivers performance and native Console.app integration while adding powerful features like category filtering, custom formatting, and pluggable sinks.
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get logging in under 2 minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Add Scribe via Swift Package Manager
+  </Card>
+  <Card title="API reference" icon="code" href="/api/log">
+    Explore the complete API
+  </Card>
+  <Card title="Configuration" icon="gear" href="/concepts/configuration">
+    Customize output and behavior
+  </Card>
+</CardGroup>
+
+## Why Scribe?
+
+Scribe eliminates the friction of logging in Swift by providing a clean API that auto-captures source location, supports reusable categories, and offers granular control over output formatting.
+
+### Clear log levels with emoji-first output
+
+Scribe uses emoji indicators by default for instant visual recognition. Short codes like `[DBG]` are available as an opt-in alternative.
+
+```swift
+Log.info("User signed in", category: .auth)
+Log.warn("Slow response", category: .network)
+Log.error("Failed to decode payload", category: .apiService)
+```
+
+**Output:**
+```text
+2025-11-28 10:15:30.123+1000 ℹ️ [Auth] User signed in — AppDelegate.swift:42
+2025-11-28 10:15:31.456+1000 ⚠️ [Network] Slow response — NetworkClient.swift:87
+2025-11-28 10:15:32.789+1000 ❌ [APIService] Failed to decode payload — APIService.swift:134
+```
+
+### Reusable categories for consistency
+
+Define categories once as static properties and reuse them throughout your codebase. This avoids typo-prone string literals and enables first-class filtering in Console.app and Xcode.
+
+```swift
+extension LogCategory {
+    static let app = LogCategory("App")
+    static let auth = LogCategory("Auth")
+    static let network = LogCategory("NetworkLayer")
+}
+
+Log.info("App launched", category: .app)
+Log.debug("Token refreshed", category: .auth)
+```
+
+### Thread-safe async logging
+
+All logging happens on a dedicated utility queue, ensuring minimal call-site blocking while maintaining thread safety across concurrent access.
+
+### Powerful filtering and configuration
+
+Control which messages appear based on level and category:
+
+```swift
+// Only log messages at info level or higher
+LogManager.shared.minimumLevel = .info
+
+// Restrict to specific categories
+let config = LogConfiguration(enabledCategories: [.network, .apiService])
+LogManager.shared.configuration = config
+```
+
+### Pluggable sinks for mirroring logs
+
+Sinks receive formatted log lines and can forward them to files, remote endpoints, or test assertions:
+
+```swift
+let sinkID = LogManager.shared.addSink { line in
+    FileAppender.shared.append(line)
+}
+
+// Or use async streams
+let stream = LogManager.shared.stream()
+Task {
+    for await line in stream {
+        print("Log:", line)
+    }
+}
+```
+
+### Macro-powered instance loggers
+
+The `@Loggable` macro automatically generates a `log` property for your types:
+
+```swift
+@Loggable
+struct TokenManager {
+    func refresh() {
+        log.info("Refreshing token")
+    }
+}
+```
+
+## Platform support
+
+Scribe supports all Apple platforms:
+
+- iOS 14.0+
+- macOS 13.0+
+- tvOS 17.0+
+- watchOS 10.0+
+- visionOS 1.0+
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Emoji-first output" icon="sparkles">
+    Visual log levels with emoji indicators for instant recognition
+  </Card>
+  <Card title="Reusable categories" icon="tag">
+    Strongly-typed categories avoid string literals and enable filtering
+  </Card>
+  <Card title="Thread-safe" icon="lock">
+    Async logging on a dedicated queue prevents blocking
+  </Card>
+  <Card title="os.log integration" icon="apple">
+    Native Console.app filtering and performance
+  </Card>
+  <Card title="Category filtering" icon="filter">
+    Enable only specific categories during development
+  </Card>
+  <Card title="Custom formatting" icon="paintbrush">
+    Full control over log output via formatter functions
+  </Card>
+  <Card title="Pluggable sinks" icon="plug">
+    Mirror logs to files, tests, or remote services
+  </Card>
+  <Card title="Minimal API" icon="bolt">
+    Static helpers auto-capture file, function, and line
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<Steps>
+  <Step title="Install Scribe">
+    Add the package via Swift Package Manager: [Installation guide](/installation)
+  </Step>
+  <Step title="Write your first log">
+    Follow the quick start to log your first message: [Quick start](/quickstart)
+  </Step>
+  <Step title="Configure output">
+    Customize log levels, categories, and formatting: [Configuration](/concepts/configuration)
+  </Step>
+</Steps>

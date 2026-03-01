@@ -1,0 +1,325 @@
+---
+title: Basic logging
+description: Learn how to use Scribe's static Log methods, log levels, and categories for everyday logging
+---
+
+Scribe provides simple static methods for logging throughout your application. Every log message has a level and an optional category for filtering and organization.
+
+## Quick start
+
+<Steps>
+  <Step title="Import Scribe">
+    Add the import statement to your Swift file:
+
+    ```swift
+    import Scribe
+    ```
+  </Step>
+
+  <Step title="Log your first message">
+    Use any of the static `Log` methods:
+
+    ```swift
+    Log.info("App launched successfully")
+    Log.debug("Processing user data")
+    Log.error("Failed to connect to server")
+    ```
+  </Step>
+
+  <Step title="Add categories for organization">
+    Define reusable categories to group related logs:
+
+    ```swift
+    extension LogCategory {
+        static let auth = LogCategory("Auth")
+        static let network = LogCategory("Network")
+        static let database = LogCategory("Database")
+    }
+
+    Log.info("User signed in", category: .auth)
+    Log.error("Connection failed", category: .network)
+    ```
+  </Step>
+</Steps>
+
+## Log levels
+
+Scribe includes 20+ specialized log levels organized into families. Each level has an emoji indicator, short code, and semantic meaning.
+
+### Development
+
+Use these levels during development and debugging:
+
+<CodeGroup>
+```swift Trace
+Log.trace("Entering fetchUserProfile()")
+Log.trace("Variable state: userId=\(userId)")
+```
+
+```swift Debug
+Log.debug("Decoded response: \(response)")
+Log.debug("Cache hit for key: \(key)")
+```
+
+```swift Print
+Log.print("Quick diagnostic output")
+```
+</CodeGroup>
+
+### General information
+
+<CodeGroup>
+```swift Info
+Log.info("Application started")
+Log.info("Configuration loaded")
+```
+
+```swift Notice
+Log.notice("Rate limit approaching")
+Log.notice("Background task scheduled")
+```
+</CodeGroup>
+
+### Problems
+
+<CodeGroup>
+```swift Warning
+Log.warn("Slow network response detected")
+Log.warn("Deprecated API usage")
+```
+
+```swift Error
+Log.error("Failed to parse JSON response")
+Log.error("Database query timeout")
+```
+
+```swift Fatal
+Log.fatal("Critical system failure")
+Log.fatal("Unable to allocate required memory")
+```
+</CodeGroup>
+
+### Success
+
+<CodeGroup>
+```swift Success
+Log.success("User profile updated")
+Log.success("Payment processed")
+```
+
+```swift Done
+Log.done("Migration complete")
+Log.done("Batch job finished")
+```
+</CodeGroup>
+
+### Networking
+
+<CodeGroup>
+```swift Network
+Log.network("WebSocket connection established")
+Log.network("Download progress: 45%")
+```
+
+```swift API
+Log.api("GET /v1/users/123")
+Log.api("POST /v1/auth/login - 200 OK")
+```
+</CodeGroup>
+
+### Security
+
+<CodeGroup>
+```swift Security
+Log.security("Certificate validation passed")
+Log.security("Encryption key rotated")
+```
+
+```swift Auth
+Log.auth("User logged in")
+Log.auth("Token refreshed")
+```
+</CodeGroup>
+
+### Performance
+
+<CodeGroup>
+```swift Metric
+Log.metric("View render time: 34ms")
+Log.metric("Memory usage: 125MB")
+```
+
+```swift Analytics
+Log.analytics("Feature flag evaluated: checkout_v2=true")
+Log.analytics("User completed onboarding")
+```
+</CodeGroup>
+
+### UI and user interaction
+
+<CodeGroup>
+```swift UI
+Log.ui("View controller appeared: ProfileViewController")
+Log.ui("Layout updated for trait collection change")
+```
+
+```swift User
+Log.user("Tapped 'Buy Now' button")
+Log.user("Swiped to dismiss modal")
+```
+</CodeGroup>
+
+### Data operations
+
+<CodeGroup>
+```swift Database
+Log.database("Executing query: SELECT * FROM users")
+Log.database("Migration applied: 20260301_add_timestamps")
+```
+
+```swift Storage
+Log.storage("Writing cache to disk")
+Log.storage("Clearing temporary files")
+```
+</CodeGroup>
+
+## Using categories
+
+Categories help you organize and filter logs by module or feature. Without a category, Scribe uses the file ID automatically.
+
+### Defining categories
+
+Extend `LogCategory` to create reusable categories:
+
+```swift
+extension LogCategory {
+    static let app = LogCategory("App")
+    static let auth = LogCategory("Auth")
+    static let network = LogCategory("Network")
+    static let apiService = LogCategory("APIService")
+    static let database = LogCategory("Database")
+}
+```
+
+### Using categories
+
+Pass the category to any log method:
+
+```swift
+Log.info("Bootstrapping application", category: .app)
+Log.auth("User logged in", category: .auth)
+Log.api("GET /v1/profile", category: .apiService)
+Log.database("Connected to database", category: .database)
+```
+
+<Note>
+If you omit the `category` parameter, Scribe automatically uses the file ID (e.g., `MyApp/Services/NetworkManager.swift`) as the category.
+</Note>
+
+### Real-world example
+
+```swift
+import Scribe
+
+extension LogCategory {
+    static let checkout = LogCategory("Checkout")
+}
+
+class CheckoutService {
+    func processPayment(amount: Decimal) {
+        Log.info("Starting payment processing", category: .checkout)
+        
+        guard amount > 0 else {
+            Log.error("Invalid amount: \(amount)", category: .checkout)
+            return
+        }
+        
+        Log.metric("Payment amount: $\(amount)", category: .checkout)
+        
+        // Process payment...
+        
+        Log.success("Payment processed successfully", category: .checkout)
+    }
+}
+```
+
+## Setting minimum level
+
+Control which logs are displayed by setting a minimum level. Messages below this threshold are ignored:
+
+```swift
+// Show only info level and above (hides trace, debug, print)
+LogManager.shared.minimumLevel = .info
+
+// Show only warnings and errors in production
+LogManager.shared.minimumLevel = .warning
+
+// Show everything during development
+LogManager.shared.minimumLevel = .trace
+```
+
+<Tip>
+Set `minimumLevel = .info` or higher in production to reduce logging overhead and noise.
+</Tip>
+
+## Log output format
+
+By default, Scribe formats logs with timestamps, emoji indicators, categories, messages, and source locations:
+
+```text
+2026-03-01 10:15:30.123+0000 ✅ [Checkout] Payment processed successfully — CheckoutService.swift:42
+2026-03-01 10:15:31.456+0000 🚀 [APIService] GET /v1/profile — NetworkManager.swift:88
+2026-03-01 10:15:32.789+0000 ⚠️ [Network] Slow response time detected — HTTPClient.swift:156
+```
+
+See [Custom formatting](/guides/custom-formatting) to customize this output.
+
+## Console.app filtering
+
+Each category gets its own `Logger` instance under your app's bundle identifier as the subsystem. In Console.app or Xcode:
+
+1. Filter by subsystem: `subsystem:com.yourapp.bundleid`
+2. Filter by category: `category:Auth` or `category:Network`
+3. Combine filters: `subsystem:com.yourapp.bundleid category:APIService`
+
+This gives you powerful native filtering without any extra configuration.
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use descriptive categories" icon="tag">
+    Create categories that match your app's architecture (e.g., `Auth`, `APIService`, `Database`).
+  </Card>
+  
+  <Card title="Choose the right level" icon="chart-line">
+    Use `debug` for development info, `info` for general events, `error` for failures, and specialized levels for specific domains.
+  </Card>
+  
+  <Card title="Raise minimum level in production" icon="shield">
+    Set `minimumLevel = .info` or `.warning` to reduce overhead and log volume.
+  </Card>
+  
+  <Card title="Avoid logging sensitive data" icon="lock">
+    Scribe does not encrypt or redact logs. Never log passwords, tokens, or personal information.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="@Loggable macro" icon="wand-magic-sparkles" href="/guides/loggable-macro">
+    Auto-generate log properties for your types
+  </Card>
+  
+  <Card title="Filtering" icon="filter" href="/guides/filtering">
+    Filter logs by category and minimum level
+  </Card>
+  
+  <Card title="Sinks and streams" icon="pipe" href="/guides/sinks-and-streams">
+    Capture logs for testing or remote logging
+  </Card>
+  
+  <Card title="Custom formatting" icon="palette" href="/guides/custom-formatting">
+    Customize log output format
+  </Card>
+</CardGroup>

@@ -1,0 +1,435 @@
+---
+title: '@Loggable macro'
+description: Automatically generate log properties for your types with the @Loggable macro
+---
+
+The `@Loggable` macro eliminates boilerplate by automatically generating a `log` property and `logCategory` for your classes, structs, and enums.
+
+## Why use @Loggable?
+
+Without `@Loggable`, you need to manually define categories and pass them to every log statement:
+
+```swift Before
+final class Updater {
+    func fetchLatestInfo() {
+        Log.info("Checking for updates...", category: .updater)
+        // ...
+        Log.info("Finished checking for updates!", category: .updater)
+    }
+
+    func installUpdate() {
+        Log.info("Installing update...", category: .updater)
+        // ...
+        Log.info("Installed update, ready to relaunch!", category: .updater)
+    }
+}
+
+extension LogCategory {
+    static let updater = LogCategory("Updater")
+}
+```
+
+With `@Loggable`, the macro generates everything for you:
+
+```swift After
+@Loggable
+final class Updater {
+    func fetchLatestInfo() {
+        log.info("Checking for updates...")
+        // ...
+        log.info("Finished checking for updates!")
+    }
+
+    func installUpdate() {
+        log.info("Installing update...")
+        // ...
+        log.info("Installed update, ready to relaunch!")
+    }
+}
+```
+
+<Note>
+The `@Loggable` macro automatically:
+- Creates a `log` property you can use anywhere in the type
+- Generates a `logCategory` using the type's name
+- Eliminates the need to manually define and pass categories
+</Note>
+
+## Basic usage
+
+<Steps>
+  <Step title="Add @Loggable to your type">
+    Apply the macro to any class, struct, or enum:
+
+    ```swift
+    @Loggable
+    struct TokenManager {
+        func refresh() {
+            log.info("Refreshing token")
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Use the log property">
+    The macro generates a `log` property with all log methods:
+
+    ```swift
+    @Loggable
+    class NetworkService {
+        func fetchData() {
+            log.info("Starting data fetch")
+            log.debug("Request URL: \(url)")
+            
+            // Perform network request...
+            
+            log.success("Data fetched successfully")
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Access the category (optional)">
+    The macro also generates a static `logCategory` property:
+
+    ```swift
+    @Loggable
+    struct APIService {}
+
+    // Use the category in other places
+    let config = LogConfiguration(
+        enabledCategories: [APIService.logCategory]
+    )
+    ```
+  </Step>
+</Steps>
+
+## Customizing the category name
+
+By default, `@Loggable` uses the type's name as the category. You can override this:
+
+```swift
+@Loggable("Network")
+struct NetworkManager {
+    func connect() {
+        // Category is "Network" instead of "NetworkManager"
+        log.info("Connecting...")
+    }
+}
+```
+
+## Using an existing category
+
+If you already have a `LogCategory` defined, you can reference it:
+
+```swift
+extension LogCategory {
+    static let network = LogCategory("Network")
+}
+
+@Loggable(category: .network)
+struct HTTPClient {
+    func request() {
+        log.api("GET /v1/users")
+    }
+}
+```
+
+## Log styles
+
+The `@Loggable` macro supports two styles: instance (default) and static.
+
+### Instance style (default)
+
+Creates an instance property that returns a shared static log:
+
+```swift
+@Loggable
+// or explicitly: @Loggable(style: .instance)
+struct UserService {
+    func login() {
+        log.auth("User logging in")
+    }
+}
+```
+
+**What the macro generates:**
+
+```swift
+struct UserService {
+    private static let _log = Log(category: LogCategory("UserService"))
+    var log: Log { Self._log }
+    static let logCategory = LogCategory("UserService")
+    
+    func login() {
+        log.auth("User logging in")
+    }
+}
+```
+
+<Note>
+Instance style is recommended for most use cases. It works with both instance methods and static methods.
+</Note>
+
+### Static style
+
+Creates a static property only:
+
+```swift
+@Loggable(style: .static)
+enum AppLifecycle {
+    static func didFinishLaunching() {
+        log.info("App launched")
+    }
+}
+```
+
+**What the macro generates:**
+
+```swift
+enum AppLifecycle {
+    static let log = Log(category: LogCategory("AppLifecycle"))
+    static let logCategory = LogCategory("AppLifecycle")
+    
+    static func didFinishLaunching() {
+        log.info("App launched")
+    }
+}
+```
+
+<Warning>
+Static style only works in static contexts. Use instance style if your type has both instance and static methods.
+</Warning>
+
+## Real-world examples
+
+### API service
+
+```swift
+@Loggable("API")
+class APIService {
+    func fetchProfile(userId: String) async throws -> Profile {
+        log.api("GET /v1/users/\(userId)")
+        log.debug("Fetching profile for user: \(userId)")
+        
+        do {
+            let profile = try await networkClient.get("/v1/users/\(userId)")
+            log.success("Profile fetched successfully")
+            log.debug("Profile data: \(profile)")
+            return profile
+        } catch {
+            log.error("Failed to fetch profile: \(error.localizedDescription)")
+            throw error
+        }
+    }
+}
+```
+
+### Database manager
+
+```swift
+@Loggable
+class DatabaseManager {
+    func migrate() {
+        log.database("Starting database migration")
+        
+        let migrations = [
+            "20260301_add_users_table",
+            "20260302_add_sessions_table"
+        ]
+        
+        for migration in migrations {
+            log.database("Applying migration: \(migration)")
+            // Apply migration...
+            log.success("Migration applied: \(migration)")
+        }
+        
+        log.done("All migrations complete")
+    }
+}
+```
+
+### Authentication manager
+
+```swift
+@Loggable("Auth")
+struct AuthManager {
+    func signIn(email: String, password: String) async throws {
+        log.auth("User attempting to sign in")
+        log.debug("Sign in attempt for email: \(email)")
+        
+        do {
+            let token = try await authenticate(email: email, password: password)
+            log.success("User signed in successfully")
+            log.security("Access token generated")
+        } catch {
+            log.error("Sign in failed: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    func signOut() {
+        log.auth("User signing out")
+        // Clear session...
+        log.success("User signed out")
+    }
+}
+```
+
+### View controller
+
+```swift
+import UIKit
+import Scribe
+
+@Loggable
+class ProfileViewController: UIViewController {
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        log.ui("ProfileViewController loaded")
+        setupUI()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        log.ui("ProfileViewController will appear")
+        loadProfile()
+    }
+    
+    private func loadProfile() {
+        log.info("Loading user profile")
+        // Fetch profile data...
+        log.done("Profile loaded")
+    }
+}
+```
+
+### Singleton service
+
+```swift
+@Loggable("Analytics")
+class AnalyticsService {
+    static let shared = AnalyticsService()
+    private init() {}
+    
+    func track(event: String, properties: [String: Any]) {
+        log.analytics("Tracking event: \(event)")
+        log.debug("Event properties: \(properties)")
+        // Send to analytics backend...
+        log.success("Event tracked")
+    }
+}
+```
+
+### Static-only type
+
+```swift
+@Loggable(style: .static)
+enum Configuration {
+    static func load() {
+        log.info("Loading configuration")
+        // Load config from disk...
+        log.success("Configuration loaded")
+    }
+    
+    static func validate() {
+        log.info("Validating configuration")
+        // Validate...
+        log.success("Configuration valid")
+    }
+}
+```
+
+## Combining with category filtering
+
+You can use the auto-generated `logCategory` for filtering:
+
+```swift
+@Loggable
+struct APIService {}
+
+@Loggable
+struct DatabaseService {}
+
+@Loggable
+struct CacheService {}
+
+// Only show logs from API and Database
+let config = LogConfiguration(
+    enabledCategories: [
+        APIService.logCategory,
+        DatabaseService.logCategory
+    ]
+)
+LogManager.shared.configuration = config
+```
+
+See [Filtering](/guides/filtering) for more details.
+
+## Macro expansion
+
+Here's what the `@Loggable` macro generates behind the scenes:
+
+```swift Input
+@Loggable
+struct TokenManager {
+    func refresh() {
+        log.info("Refreshing token")
+    }
+}
+```
+
+```swift Expansion (instance style)
+struct TokenManager {
+    private static let _log = Log(category: LogCategory("TokenManager"))
+    var log: Log { Self._log }
+    static let logCategory = LogCategory("TokenManager")
+    
+    func refresh() {
+        log.info("Refreshing token")
+    }
+}
+```
+
+```swift Expansion (static style)
+struct TokenManager {
+    static let log = Log(category: LogCategory("TokenManager"))
+    static let logCategory = LogCategory("TokenManager")
+    
+    func refresh() {
+        log.info("Refreshing token")
+    }
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use @Loggable for all loggable types" icon="wand-magic-sparkles">
+    Apply `@Loggable` to services, managers, view controllers, and other types that need logging.
+  </Card>
+  
+  <Card title="Override category names when needed" icon="pen">
+    Use `@Loggable("CustomName")` to create more concise or descriptive category names.
+  </Card>
+  
+  <Card title="Use instance style by default" icon="circle-dot">
+    The default instance style works in both instance and static contexts.
+  </Card>
+  
+  <Card title="Access logCategory for filtering" icon="filter">
+    Use the generated `logCategory` property when configuring category filtering.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Filtering" icon="filter" href="/guides/filtering">
+    Filter logs by category and minimum level
+  </Card>
+  
+  <Card title="Sinks and streams" icon="pipe" href="/guides/sinks-and-streams">
+    Capture logs for testing or remote logging
+  </Card>
+</CardGroup>

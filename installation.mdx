@@ -1,0 +1,118 @@
+---
+title: Installation
+description: Add Scribe to your Swift project using Swift Package Manager
+---
+
+Scribe is distributed as a Swift package and can be added to your project using Swift Package Manager.
+
+## Swift Package Manager
+
+<Steps>
+  <Step title="Add the package dependency">
+    Add Scribe to your `Package.swift` dependencies:
+
+    ```swift Package.swift
+    dependencies: [
+        .package(url: "https://github.com/SenpaiHunters/Scribe.git", branch: "main")
+    ]
+    ```
+  </Step>
+
+  <Step title="Add to your target">
+    Include Scribe in your target's dependencies:
+
+    ```swift Package.swift
+    targets: [
+        .target(
+            name: "YourTarget",
+            dependencies: ["Scribe"]
+        )
+    ]
+    ```
+  </Step>
+
+  <Step title="Import in your source files">
+    Import Scribe wherever you need logging:
+
+    ```swift
+    import Scribe
+    ```
+  </Step>
+</Steps>
+
+## Xcode project
+
+If you're using Xcode without a `Package.swift` file:
+
+<Steps>
+  <Step title="Open package dependencies">
+    In Xcode, go to **File > Add Package Dependencies...**
+  </Step>
+
+  <Step title="Enter the repository URL">
+    Paste the Scribe repository URL:
+
+    ```
+    https://github.com/SenpaiHunters/Scribe.git
+    ```
+  </Step>
+
+  <Step title="Select the branch">
+    Choose the `main` branch and click **Add Package**
+  </Step>
+
+  <Step title="Add to your target">
+    Select the target(s) where you want to use Scribe and click **Add Package**
+  </Step>
+</Steps>
+
+## Platform requirements
+
+Scribe requires the following minimum platform versions:
+
+| Platform | Minimum Version |
+|----------|----------------|
+| iOS | 14.0 |
+| macOS | 13.0 |
+| tvOS | 17.0 |
+| watchOS | 10.0 |
+| visionOS | 1.0 |
+
+<Note>
+  Scribe uses Swift 6.0 language features and requires Xcode 16.0 or later.
+</Note>
+
+## Verify installation
+
+Create a simple test file to verify Scribe is working:
+
+```swift
+import Scribe
+
+extension LogCategory {
+    static let test = LogCategory("Test")
+}
+
+Log.info("Scribe is ready!", category: .test)
+```
+
+Run your app and check the Xcode console or Console.app for the log output:
+
+```text
+2026-03-01 14:23:45.678+0000 ℹ️ [Test] Scribe is ready! — main.swift:8
+```
+
+## What's included
+
+The Scribe package includes:
+
+- **Scribe** — The main logging framework with `Log`, `LogManager`, and configuration types
+- **ScribeMacros** — Swift macros like `@Loggable` for generating instance loggers (automatically included)
+
+No additional setup is required beyond importing `Scribe` in your source files.
+
+## Next steps
+
+<Card title="Quick start" icon="rocket" href="/quickstart">
+  Learn the basics and write your first logs
+</Card>

@@ -1,0 +1,551 @@
+---
+title: Best practices
+description: Recommended patterns and practices for effective logging with Scribe
+---
+
+## Category management
+
+Proper category usage is key to organized, filterable logs.
+
+### Define categories once
+
+Extend `LogCategory` to create reusable, strongly-typed categories:
+
+```swift
+extension LogCategory {
+    static let app = LogCategory("App")
+    static let auth = LogCategory("Auth") 
+    static let network = LogCategory("NetworkLayer")
+    static let apiService = LogCategory("APIService")
+    static let profile = LogCategory("Profile")
+    static let storage = LogCategory("Storage")
+}
+```
+
+This approach:
+- Prevents typos in category names
+- Enables autocomplete in Xcode
+- Makes refactoring easier
+- Improves caching efficiency
+
+<Tip>
+Group related categories together in the same extension for better organization.
+</Tip>
+
+### Use the @Loggable macro
+
+The `@Loggable` macro automatically generates a `log` property for your types:
+
+```swift
+@Loggable
+struct TokenManager {
+    func refresh() {
+        log.info("Refreshing token")
+    }
+}
+```
+
+**Macro options:**
+
+```swift
+// Uses type name as category
+@Loggable
+class APIService { }
+
+// Uses custom category name
+@Loggable("CustomName")
+class NetworkLayer { }
+
+// Uses existing LogCategory
+@Loggable(category: .network)
+class HTTPClient { }
+
+// Generates static property instead of instance
+@Loggable(style: .static)
+enum Constants { }
+```
+
+### Avoid auto-generated categories in production
+
+Auto-generated categories (using `#fileID`) are convenient during development but have drawbacks:
+
+```swift
+// Development: convenient but creates cache entries per file
+Log.info("Quick debug message")  // Uses #fileID
+
+// Production: better performance and organization
+Log.info("App launched", category: .app)
+```
+
+Auto-generated categories:
+- Create one cache entry per unique file
+- Are subject to LRU eviction
+- Make filtering by category harder
+- Can grow unbounded in large apps
+
+<Note>
+Each `LogCategory` gets its own `Logger` instance, so Console.app and Xcode can filter by category without extra configuration.
+</Note>
+
+## Log level selection
+
+Choose appropriate log levels based on message purpose and severity.
+
+### Development levels
+
+**Trace** - Detailed execution flow:
+```swift
+Log.trace("Entering function processRequest()", category: .network)
+Log.trace("Loop iteration \(i) of \(total)", category: .processing)
+```
+
+**Debug** - Development information:
+```swift
+Log.debug("Decoded response: \(response)", category: .apiService)
+Log.debug("Cache hit for key: \(key)", category: .storage)
+```
+
+**Print** - Structured print replacement:
+```swift
+Log.print("Current state: \(state)", category: .app)
+```
+
+### General levels
+
+**Info** - Important events:
+```swift
+Log.info("User signed in", category: .auth)
+Log.info("Database migration completed", category: .storage)
+```
+
+**Notice** - Notable events:
+```swift
+Log.notice("Rate limit approaching", category: .api)
+Log.notice("Configuration reloaded", category: .app)
+```
+
+### Problem levels
+
+**Warning** - Potential issues:
+```swift
+Log.warn("Slow response time: \(duration)ms", category: .network)
+Log.warn("Cache size exceeds threshold", category: .storage)
+```
+
+**Error** - Handled errors:
+```swift
+Log.error("Failed to decode payload: \(error)", category: .apiService)
+Log.error("Authentication failed", category: .auth)
+```
+
+**Fatal** - Severe malfunctions:
+```swift
+Log.fatal("Database connection lost", category: .storage)
+Log.fatal("Critical service unavailable", category: .app)
+```
+
+### Domain-specific levels
+
+**Success:**
+```swift
+Log.success("Profile updated", category: .profile)
+Log.done("Background task completed", category: .sync)
+```
+
+**Networking:**
+```swift
+Log.network("WebSocket connected", category: .network)
+Log.api("GET /v1/users/123", category: .apiService)
+```
+
+**Security:**
+```swift
+Log.security("Security event detected", category: .security)
+Log.auth("Token refreshed", category: .auth)
+```
+
+**Performance:**
+```swift
+Log.metric("Home screen render: 34ms", category: .perf)
+Log.analytics("Feature flag evaluated", category: .analytics)
+```
+
+**UI:**
+```swift
+Log.ui("Dark mode enabled", category: .ui)
+Log.user("Tapped Purchase button", category: .ui)
+```
+
+**Data:**
+```swift
+Log.database("Query returned 150 results", category: .storage)
+Log.storage("Cache cleared", category: .storage)
+```
+
+<Warning>
+Never log sensitive information like passwords, tokens, credit card numbers, or personal identifiable information. Scribe does not perform automatic redaction.
+</Warning>
+
+## Environment-specific configuration
+
+Adjust logging configuration based on build environment:
+
+### Development configuration
+
+```swift
+#if DEBUG
+LogManager.shared.minimumLevel = .debug
+LogManager.shared.configuration = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: true,
+    includeFileAndLineNumber: true,
+    autoLoggerCacheLimit: 100
+)
+#endif
+```
+
+### Production configuration
+
+```swift
+#if !DEBUG
+LogManager.shared.minimumLevel = .info
+LogManager.shared.configuration = LogConfiguration(
+    enabledCategories: nil,  // All categories
+    includeTimestamp: false,  // Skip formatting overhead
+    includeEmoji: true,
+    includeFileAndLineNumber: false,  // Reduce log size
+    autoLoggerCacheLimit: 50
+)
+#endif
+```
+
+### Combined configuration
+
+```swift
+import Scribe
+
+@main
+struct MyApp: App {
+    init() {
+        configureLogging()
+    }
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+
+private func configureLogging() {
+    #if DEBUG
+    LogManager.shared.minimumLevel = .debug
+    LogManager.shared.configuration = .default
+    #else
+    LogManager.shared.minimumLevel = .info
+    LogManager.shared.configuration = LogConfiguration(
+        includeTimestamp: false,
+        autoLoggerCacheLimit: 50
+    )
+    #endif
+    
+    Log.info("Logging configured", category: .app)
+}
+```
+
+<Tip>
+Raise `minimumLevel` to `.warning` in production releases to minimize logging overhead and focus on actionable issues.
+</Tip>
+
+## Sink usage patterns
+
+Sinks enable log mirroring for testing, file writing, and remote logging.
+
+### Test sinks
+
+```swift
+func testFeature() {
+    let expectation = XCTestExpectation(description: "Log captured")
+    
+    let sinkID = LogManager.shared.addSink { line in
+        XCTAssertTrue(line.contains("Expected message"))
+        expectation.fulfill()
+    }
+    
+    // Test code that logs
+    feature.performAction()
+    
+    wait(for: [expectation], timeout: 2.0)
+    LogManager.shared.removeSink(sinkID)
+}
+```
+
+### File writing sink
+
+```swift
+final class FileLogger {
+    private let fileURL: URL
+    private let queue = DispatchQueue(label: "com.example.filelogger", qos: .utility)
+    private var sinkID: LogSubscription?
+    
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+    }
+    
+    func start() {
+        sinkID = LogManager.shared.addSink { [weak self] line in
+            self?.queue.async {
+                self?.appendToFile(line)
+            }
+        }
+    }
+    
+    func stop() {
+        if let sinkID {
+            LogManager.shared.removeSink(sinkID)
+        }
+    }
+    
+    private func appendToFile(_ line: String) {
+        guard let data = "\(line)\n".data(using: .utf8) else { return }
+        
+        if let handle = try? FileHandle(forWritingTo: fileURL) {
+            handle.seekToEndOfFile()
+            handle.write(data)
+            try? handle.close()
+        } else {
+            try? data.write(to: fileURL)
+        }
+    }
+}
+```
+
+### Remote logging sink
+
+```swift
+final class RemoteLogger {
+    private var sinkID: LogSubscription?
+    private let uploadQueue = DispatchQueue(label: "com.example.remote", qos: .utility)
+    
+    func start() {
+        // Only capture errors and above for remote logging
+        let errorCategories: Set<LogCategory> = [.auth, .network, .apiService]
+        
+        sinkID = LogManager.shared.addSink(categories: errorCategories) { [weak self] line in
+            self?.uploadQueue.async {
+                self?.sendToServer(line)
+            }
+        }
+    }
+    
+    private func sendToServer(_ line: String) {
+        // Implementation for remote log upload
+    }
+}
+```
+
+<Warning>
+Always offload expensive operations in sinks to another queue. Slow sinks block the logging queue.
+</Warning>
+
+## Console.app filtering
+
+Each `LogCategory` uses its own `Logger` under the shared subsystem, enabling powerful filtering in Console.app:
+
+### Subsystem filtering
+
+```
+subsystem:com.example.myapp
+```
+
+Shows all logs from your app.
+
+### Category filtering
+
+```
+subsystem:com.example.myapp category:NetworkLayer
+```
+
+Shows only logs from the `NetworkLayer` category.
+
+### Combined filtering
+
+```
+subsystem:com.example.myapp category:Auth OR category:APIService
+```
+
+Shows logs from either `Auth` or `APIService` categories.
+
+### Level filtering in Console.app
+
+Use the log level menu to filter by severity:
+- **Debug and Info** - All messages
+- **Info** - Info and above
+- **Notice** - Notice and above
+- **Error** - Error and fault only
+
+<Tip>
+Define clear category naming conventions (e.g., `NetworkLayer`, `APIService`, `Auth`) to make Console.app filtering more effective.
+</Tip>
+
+## Performance considerations
+
+### Minimize minimum level in production
+
+```swift
+// Development: see everything
+LogManager.shared.minimumLevel = .debug
+
+// Production: reduce overhead
+LogManager.shared.minimumLevel = .info  // or .warning
+```
+
+Messages below the minimum level are filtered before formatting, making them nearly free.
+
+### Prefer defined categories
+
+```swift
+// Better: cached permanently, no LRU eviction
+Log.info("Message", category: .network)
+
+// Okay: cached with LRU, subject to eviction
+Log.info("Message")  // Uses #fileID
+```
+
+### Avoid expensive string interpolation
+
+While `os.log` defers formatting, your message string is still evaluated:
+
+```swift
+// Bad: JSON encoding happens even if filtered
+Log.debug("State: \(try? JSONEncoder().encode(state))")
+
+// Better: guard with level check
+if LogManager.shared.minimumLevel <= .debug {
+    Log.debug("State: \(try? JSONEncoder().encode(state))")
+}
+
+// Best: keep it simple
+Log.debug("State updated", category: .app)
+```
+
+### Keep sinks fast
+
+```swift
+// Good: quick in-memory operation
+LogManager.shared.addSink { line in
+    buffer.append(line)
+}
+
+// Bad: slow I/O blocks logging queue
+LogManager.shared.addSink { line in
+    try? line.write(to: fileURL, atomically: true, encoding: .utf8)
+}
+
+// Better: offload to another queue
+LogManager.shared.addSink { line in
+    fileQueue.async {
+        try? line.write(to: fileURL, atomically: true, encoding: .utf8)
+    }
+}
+```
+
+## Security and privacy
+
+### Never log sensitive data
+
+```swift
+// Bad: logs sensitive information
+Log.info("User password: \(password)", category: .auth)
+Log.debug("API key: \(apiKey)", category: .network)
+Log.info("Credit card: \(cardNumber)", category: .payment)
+
+// Good: logs safely without exposing data
+Log.info("User authenticated", category: .auth)
+Log.debug("API request initiated", category: .network)
+Log.info("Payment processed", category: .payment)
+```
+
+### Log identifiers, not content
+
+```swift
+// Bad: logs message content
+Log.info("Sending message: \(messageText)", category: .messaging)
+
+// Good: logs metadata only
+Log.info("Sending message with ID: \(messageID)", category: .messaging)
+```
+
+### Be careful with error messages
+
+```swift
+// Bad: error might contain sensitive data
+Log.error("Request failed: \(error)", category: .network)
+
+// Better: log error type without details
+Log.error("Request failed: \(type(of: error))", category: .network)
+
+// Best: log actionable information only
+Log.error("Request failed with status code \(statusCode)", category: .network)
+```
+
+<Warning>
+Scribe does not perform automatic redaction or encryption. You are responsible for ensuring logs don't contain sensitive information.
+</Warning>
+
+## Code organization
+
+### Centralize category definitions
+
+```swift
+// LogCategories.swift
+import Scribe
+
+extension LogCategory {
+    // App lifecycle
+    static let app = LogCategory("App")
+    
+    // Authentication & authorization  
+    static let auth = LogCategory("Auth")
+    
+    // Networking
+    static let network = LogCategory("NetworkLayer")
+    static let apiService = LogCategory("APIService")
+    
+    // Data & storage
+    static let database = LogCategory("Database")
+    static let storage = LogCategory("Storage")
+    
+    // Features
+    static let profile = LogCategory("Profile")
+    static let messaging = LogCategory("Messaging")
+}
+```
+
+### Centralize configuration
+
+```swift
+// LogConfiguration+App.swift
+import Scribe
+
+extension LogConfiguration {
+    static var production: LogConfiguration {
+        LogConfiguration(
+            includeTimestamp: false,
+            includeFileAndLineNumber: false,
+            autoLoggerCacheLimit: 50
+        )
+    }
+    
+    static var staging: LogConfiguration {
+        LogConfiguration(
+            includeTimestamp: true,
+            autoLoggerCacheLimit: 100
+        )
+    }
+}
+```
+
+<Tip>
+Organize logging code in dedicated files to keep your codebase clean and maintainable.
+</Tip>

@@ -1,0 +1,498 @@
+---
+title: Sinks and streams
+description: Capture and forward log messages using sinks and AsyncStream for testing, file writing, or remote logging
+---
+
+Sinks and streams allow you to capture formatted log messages and send them to files, remote endpoints, test assertions, or any other destination.
+
+## Understanding sinks
+
+A sink is a callback function that receives every formatted log line. Sinks are useful for:
+
+- Capturing logs in unit tests
+- Writing logs to files
+- Forwarding logs to remote logging services
+- Monitoring specific log patterns
+
+## Adding a sink
+
+Use `LogManager.shared.addSink` to register a callback:
+
+```swift
+let sinkID = LogManager.shared.addSink { line in
+    print("Captured:", line)
+}
+```
+
+The callback receives the fully formatted log line:
+
+```text
+2026-03-01 10:15:30.123+0000 ✅ [Auth] User signed in — AuthManager.swift:42
+```
+
+## Removing sinks
+
+### Remove a specific sink
+
+Store the returned `LogSubscription` and use it to remove the sink later:
+
+```swift
+// Add sink and store its ID
+let sinkID = LogManager.shared.addSink { line in
+    print("Log:", line)
+}
+
+// Remove when done
+LogManager.shared.removeSink(sinkID)
+```
+
+### Remove all sinks
+
+Remove all registered sinks at once:
+
+```swift
+LogManager.shared.removeAllSinks()
+```
+
+### Check sink count
+
+Query how many sinks are currently registered:
+
+```swift
+let count = LogManager.shared.sinkCount
+print("Active sinks: \(count)")
+```
+
+## Filtering by category
+
+You can create sinks that only receive logs from specific categories:
+
+```swift
+extension LogCategory {
+    static let network = LogCategory("Network")
+    static let database = LogCategory("Database")
+}
+
+// Only receive network logs
+let networkSink = LogManager.shared.addSink(
+    categories: [.network]
+) { line in
+    writeToNetworkLogFile(line)
+}
+
+// Receive logs from multiple categories
+let errorSink = LogManager.shared.addSink(
+    categories: [.network, .database]
+) { line in
+    sendToErrorTrackingService(line)
+}
+
+// Receive all logs (default)
+let allLogsSink = LogManager.shared.addSink { line in
+    writeToMainLogFile(line)
+}
+```
+
+## AsyncStream for async/await
+
+If you prefer async/await over callbacks, use `stream()` to create an `AsyncStream<String>`:
+
+```swift
+let stream = LogManager.shared.stream()
+
+Task {
+    for await line in stream {
+        print("Log:", line)
+    }
+}
+```
+
+### Filtering streams by category
+
+Just like sinks, streams can filter by category:
+
+```swift
+extension LogCategory {
+    static let api = LogCategory("API")
+}
+
+let apiStream = LogManager.shared.stream(categories: [.api])
+
+Task {
+    for await line in apiStream {
+        // Only receives API logs
+        sendToAnalytics(line)
+    }
+}
+```
+
+### Multiple concurrent streams
+
+You can create multiple streams, each with different category filters:
+
+```swift
+extension LogCategory {
+    static let network = LogCategory("Network")
+    static let security = LogCategory("Security")
+}
+
+let networkStream = LogManager.shared.stream(categories: [.network])
+let securityStream = LogManager.shared.stream(categories: [.security])
+
+Task {
+    for await line in networkStream {
+        writeToNetworkLog(line)
+    }
+}
+
+Task {
+    for await line in securityStream {
+        sendSecurityAlert(line)
+    }
+}
+```
+
+## Real-world examples
+
+### File logging
+
+Write all logs to a file:
+
+```swift
+import Foundation
+import Scribe
+
+class FileLogger {
+    private let fileURL: URL
+    private var sinkID: LogSubscription?
+    
+    init(filename: String) {
+        let documentsPath = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        ).first!
+        fileURL = documentsPath.appendingPathComponent(filename)
+        
+        setupSink()
+    }
+    
+    private func setupSink() {
+        sinkID = LogManager.shared.addSink { [weak self] line in
+            self?.append(line)
+        }
+    }
+    
+    private func append(_ line: String) {
+        guard let data = (line + "\n").data(using: .utf8) else { return }
+        
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            let fileHandle = try? FileHandle(forWritingTo: fileURL)
+            fileHandle?.seekToEndOfFile()
+            fileHandle?.write(data)
+            fileHandle?.closeFile()
+        } else {
+            try? data.write(to: fileURL)
+        }
+    }
+    
+    func stop() {
+        if let sinkID {
+            LogManager.shared.removeSink(sinkID)
+        }
+    }
+}
+
+// Usage
+let fileLogger = FileLogger(filename: "app.log")
+
+Log.info("This will be written to app.log")
+Log.error("Errors are written too")
+
+// Stop when done
+fileLogger.stop()
+```
+
+### Remote logging service
+
+Forward logs to a remote endpoint:
+
+```swift
+import Scribe
+
+class RemoteLogger {
+    private let endpoint: URL
+    private var buffer: [String] = []
+    private var sinkID: LogSubscription?
+    
+    init(endpoint: URL) {
+        self.endpoint = endpoint
+        setupSink()
+        startFlushTimer()
+    }
+    
+    private func setupSink() {
+        sinkID = LogManager.shared.addSink { [weak self] line in
+            self?.buffer.append(line)
+        }
+    }
+    
+    private func startFlushTimer() {
+        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.flush()
+        }
+    }
+    
+    private func flush() {
+        guard !buffer.isEmpty else { return }
+        
+        let logs = buffer
+        buffer.removeAll()
+        
+        Task {
+            await sendLogs(logs)
+        }
+    }
+    
+    private func sendLogs(_ logs: [String]) async {
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["logs": logs])
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse,
+               httpResponse.statusCode == 200 {
+                Log.success("Sent \(logs.count) logs to remote server")
+            }
+        } catch {
+            Log.error("Failed to send logs: \(error.localizedDescription)")
+        }
+    }
+}
+
+// Usage
+let remoteLogger = RemoteLogger(
+    endpoint: URL(string: "https://logs.example.com/ingest")!
+)
+
+Log.info("This will be sent to the remote server")
+```
+
+### Category-specific file logging
+
+Write different categories to different files:
+
+```swift
+import Scribe
+
+class CategoryFileLogger {
+    private var sinkIDs: [LogSubscription] = []
+    
+    func start() {
+        // Network logs → network.log
+        let networkSink = LogManager.shared.addSink(
+            categories: [.init("Network")]
+        ) { line in
+            self.writeToFile("network.log", line: line)
+        }
+        sinkIDs.append(networkSink)
+        
+        // Error logs → errors.log
+        let errorSink = LogManager.shared.addSink(
+            categories: [.init("Error")]
+        ) { line in
+            self.writeToFile("errors.log", line: line)
+        }
+        sinkIDs.append(errorSink)
+        
+        // All other logs → app.log
+        let generalSink = LogManager.shared.addSink { line in
+            self.writeToFile("app.log", line: line)
+        }
+        sinkIDs.append(generalSink)
+    }
+    
+    private func writeToFile(_ filename: String, line: String) {
+        // Implementation similar to FileLogger example
+    }
+    
+    func stop() {
+        sinkIDs.forEach { LogManager.shared.removeSink($0) }
+        sinkIDs.removeAll()
+    }
+}
+```
+
+### Test assertions
+
+Capture logs in unit tests:
+
+```swift
+import XCTest
+import Scribe
+
+class AuthManagerTests: XCTestCase {
+    func testLoginLogging() {
+        let expectation = XCTestExpectation(description: "Log captured")
+        var capturedLogs: [String] = []
+        
+        let sinkID = LogManager.shared.addSink { line in
+            capturedLogs.append(line)
+            
+            if line.contains("User signed in") {
+                expectation.fulfill()
+            }
+        }
+        
+        // Perform login
+        let authManager = AuthManager()
+        authManager.signIn(email: "test@example.com", password: "password")
+        
+        wait(for: [expectation], timeout: 2.0)
+        
+        // Verify logs
+        XCTAssertTrue(capturedLogs.contains { $0.contains("User signed in") })
+        XCTAssertTrue(capturedLogs.contains { $0.contains("Auth") })
+        
+        LogManager.shared.removeSink(sinkID)
+    }
+}
+```
+
+### Real-time log monitoring
+
+Monitor logs in real-time with AsyncStream:
+
+```swift
+import SwiftUI
+import Scribe
+
+class LogMonitor: ObservableObject {
+    @Published var logs: [String] = []
+    private var task: Task<Void, Never>?
+    
+    func startMonitoring() {
+        let stream = LogManager.shared.stream()
+        
+        task = Task {
+            for await line in stream {
+                await MainActor.run {
+                    logs.append(line)
+                    
+                    // Keep only last 100 logs
+                    if logs.count > 100 {
+                        logs.removeFirst()
+                    }
+                }
+            }
+        }
+    }
+    
+    func stopMonitoring() {
+        task?.cancel()
+    }
+}
+
+struct LogMonitorView: View {
+    @StateObject private var monitor = LogMonitor()
+    
+    var body: some View {
+        List(monitor.logs, id: \.self) { log in
+            Text(log)
+                .font(.system(.caption, design: .monospaced))
+        }
+        .onAppear {
+            monitor.startMonitoring()
+        }
+        .onDisappear {
+            monitor.stopMonitoring()
+        }
+    }
+}
+```
+
+### Error tracking integration
+
+Send errors to a tracking service like Sentry:
+
+```swift
+import Scribe
+
+class ErrorTracker {
+    private var sinkID: LogSubscription?
+    
+    func start() {
+        sinkID = LogManager.shared.addSink { line in
+            // Only track errors and fatal logs
+            if line.contains("❌") || line.contains("💥") {
+                self.sendToSentry(line)
+            }
+        }
+    }
+    
+    private func sendToSentry(_ message: String) {
+        // Send to Sentry or similar service
+    }
+    
+    func stop() {
+        if let sinkID {
+            LogManager.shared.removeSink(sinkID)
+        }
+    }
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Clean up sinks" icon="broom">
+    Always remove sinks when they're no longer needed to prevent memory leaks and unnecessary processing.
+  </Card>
+  
+  <Card title="Use category filtering" icon="filter">
+    Filter sinks by category to reduce processing overhead and organize log destinations.
+  </Card>
+  
+  <Card title="Batch remote writes" icon="layer-group">
+    Buffer logs and send them in batches to reduce network overhead.
+  </Card>
+  
+  <Card title="Handle errors gracefully" icon="shield-check">
+    Ensure sink callbacks don't throw errors that could crash the logging system.
+  </Card>
+</CardGroup>
+
+## Performance considerations
+
+- Sinks and streams are called on Scribe's internal logging queue
+- Keep sink callbacks fast to avoid blocking log processing
+- For expensive operations (network, disk I/O), dispatch to a background queue
+- Use category filtering to reduce unnecessary sink invocations
+
+```swift
+// Good: Dispatch expensive work to background queue
+let sinkID = LogManager.shared.addSink { line in
+    DispatchQueue.global(qos: .background).async {
+        writeToFile(line)
+    }
+}
+
+// Avoid: Blocking the log queue with expensive work
+let sinkID = LogManager.shared.addSink { line in
+    // This blocks all logging!
+    Thread.sleep(forTimeInterval: 1.0)
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Filtering" icon="filter" href="/guides/filtering">
+    Learn about category and level filtering
+  </Card>
+  
+  <Card title="Custom formatting" icon="palette" href="/guides/custom-formatting">
+    Customize log output format
+  </Card>
+</CardGroup>

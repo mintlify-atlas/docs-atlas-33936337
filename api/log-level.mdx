@@ -1,0 +1,549 @@
+---
+title: LogLevel
+description: Represents the severity and domain of a log message
+---
+
+## Overview
+
+The `LogLevel` enum represents the severity and domain of a log message. Log levels are organized into families for logical grouping and include emoji indicators, short codes, and OS log type mappings.
+
+```swift
+// Compare levels
+if currentLevel >= .warning { ... }
+
+// Filter by family
+let networkLevels = LogLevel.levels(in: .networking)
+
+// Parse from string
+let level = LogLevel.parse("ERR") // Returns .error
+```
+
+## Cases
+
+### Debug and development
+
+<ResponseField name="trace" type="LogLevel">
+  🔬 Detailed debugging for tracing execution flow. Raw value: `0`
+</ResponseField>
+
+<ResponseField name="debug" type="LogLevel">
+  🔍 Debug information for development. Raw value: `1`
+</ResponseField>
+
+<ResponseField name="print" type="LogLevel">
+  📝 Standard print replacement with structured output. Raw value: `2`
+</ResponseField>
+
+### General information
+
+<ResponseField name="info" type="LogLevel">
+  ℹ️ General informational messages. Raw value: `10`
+</ResponseField>
+
+<ResponseField name="notice" type="LogLevel">
+  📢 Notable events worth attention. Raw value: `11`
+</ResponseField>
+
+### Warnings and errors
+
+<ResponseField name="warning" type="LogLevel">
+  ⚠️ Warning about potential issues. Raw value: `20`
+</ResponseField>
+
+<ResponseField name="error" type="LogLevel">
+  ❌ Error that was handled. Raw value: `21`
+</ResponseField>
+
+<ResponseField name="fatal" type="LogLevel">
+  💥 Fatal error causing severe malfunction. Raw value: `22`
+</ResponseField>
+
+### Success and completion
+
+<ResponseField name="success" type="LogLevel">
+  ✅ Successful operation. Raw value: `30`
+</ResponseField>
+
+<ResponseField name="done" type="LogLevel">
+  ✨ Task or operation completion. Raw value: `31`
+</ResponseField>
+
+### Network operations
+
+<ResponseField name="network" type="LogLevel">
+  🌐 Network-related activity. Raw value: `40`
+</ResponseField>
+
+<ResponseField name="api" type="LogLevel">
+  🚀 API call activity. Raw value: `41`
+</ResponseField>
+
+### Security and authentication
+
+<ResponseField name="security" type="LogLevel">
+  🔒 Security-related events. Raw value: `50`
+</ResponseField>
+
+<ResponseField name="auth" type="LogLevel">
+  🔑 Authentication events. Raw value: `51`
+</ResponseField>
+
+### Performance and analytics
+
+<ResponseField name="metric" type="LogLevel">
+  📊 Performance metrics. Raw value: `60`
+</ResponseField>
+
+<ResponseField name="analytics" type="LogLevel">
+  📈 Analytics events. Raw value: `61`
+</ResponseField>
+
+### UI and user interaction
+
+<ResponseField name="ui" type="LogLevel">
+  🎨 UI events. Raw value: `70`
+</ResponseField>
+
+<ResponseField name="user" type="LogLevel">
+  👤 User actions. Raw value: `71`
+</ResponseField>
+
+### Database and storage
+
+<ResponseField name="database" type="LogLevel">
+  💾 Database operations. Raw value: `80`
+</ResponseField>
+
+<ResponseField name="storage" type="LogLevel">
+  📦 Storage operations. Raw value: `81`
+</ResponseField>
+
+## Display properties
+
+### emoji
+
+Emoji indicator for this log level.
+
+```swift
+public var emoji: String { get }
+```
+
+<ResponseField name="emoji" type="String">
+  A single emoji character representing the log level
+</ResponseField>
+
+#### Example
+
+```swift
+print(LogLevel.error.emoji) // "❌"
+print(LogLevel.success.emoji) // "✅"
+```
+
+### name
+
+Human-readable name for this log level.
+
+```swift
+public var name: String { get }
+```
+
+<ResponseField name="name" type="String">
+  Lowercase string name of the log level
+</ResponseField>
+
+#### Example
+
+```swift
+print(LogLevel.warning.name) // "warning"
+print(LogLevel.api.name) // "api"
+```
+
+### shortCode
+
+Three-character code for compact display.
+
+```swift
+public var shortCode: String { get }
+```
+
+<ResponseField name="shortCode" type="String">
+  Three-letter uppercase code for the log level
+</ResponseField>
+
+#### Example
+
+```swift
+print(LogLevel.debug.shortCode) // "DBG"
+print(LogLevel.fatal.shortCode) // "FTL"
+```
+
+### description
+
+String description showing emoji and uppercase name.
+
+```swift
+public var description: String { get }
+```
+
+<ResponseField name="description" type="String">
+  Formatted string with emoji and uppercase name
+</ResponseField>
+
+#### Example
+
+```swift
+print(LogLevel.info.description) // "ℹ️ INFO"
+print(LogLevel.error.description) // "❌ ERROR"
+```
+
+## Family grouping
+
+### Family enum
+
+Logical grouping of related log levels.
+
+```swift
+public enum Family: String, Sendable, CaseIterable {
+    case development
+    case general
+    case problems
+    case success
+    case networking
+    case security
+    case performance
+    case ui
+    case data
+}
+```
+
+<ResponseField name="development" type="Family">
+  Contains: `.trace`, `.debug`, `.print`
+</ResponseField>
+
+<ResponseField name="general" type="Family">
+  Contains: `.info`, `.notice`
+</ResponseField>
+
+<ResponseField name="problems" type="Family">
+  Contains: `.warning`, `.error`, `.fatal`
+</ResponseField>
+
+<ResponseField name="success" type="Family">
+  Contains: `.success`, `.done`
+</ResponseField>
+
+<ResponseField name="networking" type="Family">
+  Contains: `.network`, `.api`
+</ResponseField>
+
+<ResponseField name="security" type="Family">
+  Contains: `.security`, `.auth`
+</ResponseField>
+
+<ResponseField name="performance" type="Family">
+  Contains: `.metric`, `.analytics`
+</ResponseField>
+
+<ResponseField name="ui" type="Family">
+  Contains: `.ui`, `.user`
+</ResponseField>
+
+<ResponseField name="data" type="Family">
+  Contains: `.database`, `.storage`
+</ResponseField>
+
+### family
+
+The family this log level belongs to.
+
+```swift
+public var family: Family { get }
+```
+
+<ResponseField name="family" type="Family">
+  The family classification for this log level
+</ResponseField>
+
+#### Example
+
+```swift
+if LogLevel.error.family == .problems {
+    print("This is a problem-related log level")
+}
+```
+
+## Predefined sets
+
+### allSevere
+
+Error and fatal levels.
+
+```swift
+public static let allSevere: Set<LogLevel>
+```
+
+<ResponseField name="allSevere" type="Set<LogLevel>">
+  Contains: `.error`, `.fatal`
+</ResponseField>
+
+### allWarnings
+
+Warning level only.
+
+```swift
+public static let allWarnings: Set<LogLevel>
+```
+
+<ResponseField name="allWarnings" type="Set<LogLevel>">
+  Contains: `.warning`
+</ResponseField>
+
+### allProblems
+
+All problem levels (warnings, errors, fatal).
+
+```swift
+public static let allProblems: Set<LogLevel>
+```
+
+<ResponseField name="allProblems" type="Set<LogLevel>">
+  Contains: `.warning`, `.error`, `.fatal`
+</ResponseField>
+
+### allSuccess
+
+Success and done levels.
+
+```swift
+public static let allSuccess: Set<LogLevel>
+```
+
+<ResponseField name="allSuccess" type="Set<LogLevel>">
+  Contains: `.success`, `.done`
+</ResponseField>
+
+### allNetwork
+
+Network and API levels.
+
+```swift
+public static let allNetwork: Set<LogLevel>
+```
+
+<ResponseField name="allNetwork" type="Set<LogLevel>">
+  Contains: `.network`, `.api`
+</ResponseField>
+
+### allSecurity
+
+Security and auth levels.
+
+```swift
+public static let allSecurity: Set<LogLevel>
+```
+
+<ResponseField name="allSecurity" type="Set<LogLevel>">
+  Contains: `.security`, `.auth`
+</ResponseField>
+
+### allPerformance
+
+Metric and analytics levels.
+
+```swift
+public static let allPerformance: Set<LogLevel>
+```
+
+<ResponseField name="allPerformance" type="Set<LogLevel>">
+  Contains: `.metric`, `.analytics`
+</ResponseField>
+
+### allUI
+
+UI and user levels.
+
+```swift
+public static let allUI: Set<LogLevel>
+```
+
+<ResponseField name="allUI" type="Set<LogLevel>">
+  Contains: `.ui`, `.user`
+</ResponseField>
+
+### allData
+
+Database and storage levels.
+
+```swift
+public static let allData: Set<LogLevel>
+```
+
+<ResponseField name="allData" type="Set<LogLevel>">
+  Contains: `.database`, `.storage`
+</ResponseField>
+
+### noisyLevels
+
+Verbose levels typically filtered in production.
+
+```swift
+public static let noisyLevels: Set<LogLevel>
+```
+
+<ResponseField name="noisyLevels" type="Set<LogLevel>">
+  Contains: `.trace`, `.debug`, `.print`
+</ResponseField>
+
+#### Example
+
+```swift
+// Filter out noisy levels in production
+if !LogLevel.noisyLevels.contains(level) {
+    sendToRemoteLogging(message)
+}
+```
+
+## Helper methods
+
+### levels(minimum:)
+
+Returns all log levels at or above the specified minimum.
+
+```swift
+public static func levels(minimum: LogLevel) -> [LogLevel]
+```
+
+<ParamField path="minimum" type="LogLevel" required>
+  The minimum level threshold
+</ParamField>
+
+<ResponseField name="return" type="[LogLevel]">
+  Array of levels sorted by raw value
+</ResponseField>
+
+#### Example
+
+```swift
+let importantLevels = LogLevel.levels(minimum: .warning)
+// Returns: [.warning, .error, .fatal, .success, .done, ...]
+```
+
+### levels(in:)
+
+Returns all log levels in the specified family.
+
+```swift
+public static func levels(in family: Family) -> [LogLevel]
+```
+
+<ParamField path="family" type="Family" required>
+  The family to filter by
+</ParamField>
+
+<ResponseField name="return" type="[LogLevel]">
+  Array of levels sorted by raw value
+</ResponseField>
+
+#### Example
+
+```swift
+let networkLevels = LogLevel.levels(in: .networking)
+// Returns: [.network, .api]
+```
+
+### families()
+
+Returns all available families.
+
+```swift
+public static func families() -> [Family]
+```
+
+<ResponseField name="return" type="[Family]">
+  Array of all family cases
+</ResponseField>
+
+#### Example
+
+```swift
+for family in LogLevel.families() {
+    print("Family: \(family.rawValue)")
+}
+```
+
+### parse(_:)
+
+Parses a string into a `LogLevel`.
+
+Accepts level names (e.g., "error"), short codes (e.g., "ERR"), or emojis (e.g., "❌").
+
+```swift
+public static func parse(_ string: String) -> LogLevel?
+```
+
+<ParamField path="string" type="String" required>
+  The string to parse
+</ParamField>
+
+<ResponseField name="return" type="LogLevel?">
+  The matching `LogLevel`, or `nil` if no match found
+</ResponseField>
+
+#### Example
+
+```swift
+if let level = LogLevel.parse("ERR") {
+    print("Parsed level: \(level.name)") // "error"
+}
+
+if let level = LogLevel.parse("info") {
+    print("Parsed level: \(level.emoji)") // "ℹ️"
+}
+
+if let level = LogLevel.parse("❌") {
+    print("Parsed level: \(level.name)") // "error"
+}
+```
+
+## OS integration
+
+### osLogType
+
+Maps this log level to the appropriate `OSLogType`.
+
+```swift
+public var osLogType: OSLogType { get }
+```
+
+<ResponseField name="osLogType" type="OSLogType">
+  The corresponding OSLogType for use with Apple's unified logging system
+</ResponseField>
+
+#### Mappings
+
+- `.trace`, `.debug`, `.print` → `OSLogType.debug`
+- `.info`, `.notice`, `.success`, `.done` → `OSLogType.info`
+- `.error` → `OSLogType.error`
+- `.fatal` → `OSLogType.fault`
+- All others → `OSLogType.default`
+
+#### Example
+
+```swift
+let osType = LogLevel.error.osLogType
+// Returns: OSLogType.error
+```
+
+## Comparison
+
+Log levels are comparable based on their raw values:
+
+```swift
+if LogLevel.error > LogLevel.warning {
+    print("Error is more severe than warning")
+}
+
+if currentLevel >= .info {
+    print("Level is info or above")
+}
+```

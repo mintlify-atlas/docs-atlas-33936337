@@ -1,0 +1,427 @@
+---
+title: Performance optimization
+description: Optimize logging performance with minimum levels, cache limits, and deferred formatting
+---
+
+## Performance characteristics
+
+Scribe is designed for minimal overhead while providing rich logging capabilities. Understanding its performance characteristics helps you optimize for production use.
+
+### Deferred formatting with os.log
+
+Scribe leverages Apple's `os.log` framework, which provides extremely efficient logging:
+
+```swift
+switch level.osLogType {
+case .fault:
+    logger.fault("\(formatted, privacy: .public)")
+case .error:
+    logger.error("\(formatted, privacy: .public)")
+case .debug:
+    logger.debug("\(formatted, privacy: .public)")
+case .info:
+    logger.info("\(formatted, privacy: .public)")
+default:
+    logger.log("\(formatted, privacy: .public)")
+}
+```
+
+`os.log` defers string interpolation and formatting until the log is actually viewed in Console.app or captured by a logging tool. This means the performance cost is minimal even for complex log messages.
+
+<Note>
+Formatted strings are still computed for sinks and streams, but the underlying `os.log` formatting is deferred.
+</Note>
+
+### Utility queue for minimal blocking
+
+All logging operations occur on a dedicated queue with `.utility` QoS:
+
+```swift
+logQueue = DispatchQueue(label: "\(subsystem).logging", qos: .utility)
+```
+
+This ensures:
+- Main thread is never blocked
+- User interactions remain responsive
+- Background work isn't starved
+- System balances logging with other tasks
+
+### Async writes, sync reads
+
+Configuration changes use async operations to avoid blocking:
+
+```swift
+public var minimumLevel: LogLevel {
+    get { logQueue.sync { _minimumLevel } }      // Fast read
+    set { logQueue.async { self._minimumLevel = newValue } }  // Non-blocking write
+}
+```
+
+Reads complete immediately, while writes are queued without blocking the caller.
+
+## Minimum level filtering
+
+The most effective performance optimization is setting an appropriate minimum log level.
+
+### Early filtering
+
+Messages below the minimum level are filtered **before** formatting:
+
+```swift
+public func log(
+    _ message: String,
+    level: LogLevel,
+    category: LogCategory,
+    file: String = #file,
+    function: String = #function,
+    line: Int = #line
+) {
+    logQueue.async {
+        // ...
+        let minLevel = self._minimumLevel
+        
+        guard level >= minLevel else { return }  // Early exit
+        
+        // Formatting only happens if level passes
+        let formatted = // ...
+    }
+}
+```
+
+This means trace and debug messages in production have near-zero cost when the minimum level is `.info` or higher.
+
+### Setting minimum levels
+
+**Development:**
+```swift
+LogManager.shared.minimumLevel = .debug  // See everything
+```
+
+**Production:**
+```swift
+#if DEBUG
+LogManager.shared.minimumLevel = .debug
+#else
+LogManager.shared.minimumLevel = .info  // Filter trace/debug
+#endif
+```
+
+**Critical production issues:**
+```swift
+LogManager.shared.minimumLevel = .warning  // Only warnings and errors
+```
+
+### Level comparison performance
+
+Log levels use raw integer values for fast comparison:
+
+```swift
+public enum LogLevel: Int, Comparable, Sendable {
+    case trace = 0
+    case debug = 1
+    case print = 2
+    case info = 10
+    // ...
+}
+
+public static func < (lhs: LogLevel, rhs: LogLevel) -> Bool {
+    lhs.rawValue < rhs.rawValue  // Simple integer comparison
+}
+```
+
+This makes the guard condition extremely fast.
+
+<Tip>
+Raise `minimumLevel` to `.info` or `.warning` in production to significantly reduce logging overhead.
+</Tip>
+
+## Category filtering
+
+Filter by category to reduce both logging volume and processing overhead.
+
+### Configuration-based filtering
+
+```swift
+let config = LogConfiguration(
+    enabledCategories: [.network, .auth, .database]
+)
+LogManager.shared.configuration = config
+
+// Only these categories will be logged
+Log.network("API call", category: .network)      // Logged
+Log.auth("Login attempt", category: .auth)        // Logged  
+Log.ui("Button tapped", category: .ui)            // Filtered out
+```
+
+Filtering happens after minimum level check:
+
+```swift
+guard level >= minLevel else { return }
+if let enabled = cfg.enabledCategories, !enabled.contains(category) {
+    return  // Category filtered
+}
+```
+
+### Dynamic category filtering
+
+Change enabled categories at runtime for focused debugging:
+
+```swift
+// Normal operation - all categories
+LogManager.shared.configuration = LogConfiguration(enabledCategories: nil)
+
+// Debugging network issues - network only
+LogManager.shared.configuration = LogConfiguration(
+    enabledCategories: [.network, .api]
+)
+
+// Back to all categories
+LogManager.shared.configuration = .default
+```
+
+<Warning>
+Category filtering requires a Set lookup. For maximum performance, use `nil` (all categories) combined with a higher minimum level.
+</Warning>
+
+## Logger cache limits
+
+Cache limits prevent unbounded memory growth from auto-generated categories.
+
+### Default limit
+
+The default auto-generated logger cache limit is 100:
+
+```swift
+public init(
+    // ...
+    autoLoggerCacheLimit: Int? = 100,
+    // ...
+) {
+    // ...
+}
+```
+
+This is sufficient for most applications while preventing memory issues.
+
+### When to adjust cache limits
+
+**Small apps with few files:**
+```swift
+let config = LogConfiguration(autoLoggerCacheLimit: 25)
+LogManager.shared.configuration = config
+```
+
+**Large apps with many modules:**
+```swift
+let config = LogConfiguration(autoLoggerCacheLimit: 200)
+LogManager.shared.configuration = config
+```
+
+**Apps using primarily defined categories:**
+```swift
+// Lower limit since most logging uses explicit categories
+let config = LogConfiguration(autoLoggerCacheLimit: 10)
+LogManager.shared.configuration = config
+```
+
+### Cache eviction performance
+
+LRU eviction uses a simple array for tracking order:
+
+```swift
+private func trimAutoLoggerCache(to limit: Int) {
+    while autoLoggerOrder.count > limit {
+        let evictKey = autoLoggerOrder.removeFirst()  // O(n)
+        autoLoggers.removeValue(forKey: evictKey)     // O(1)
+    }
+}
+```
+
+Eviction happens only when the limit is exceeded, so the performance impact is minimal.
+
+<Note>
+Custom categories (defined via `LogCategory` extensions) are never evicted and don't count toward the cache limit.
+</Note>
+
+## Formatting optimization
+
+### Built-in formatter
+
+The default formatter constructs strings efficiently using array joining:
+
+```swift
+var parts: [String] = []
+if let tsComponent {
+    parts.append(tsComponent)
+}
+if cfg.includeEmoji {
+    parts.append(level.emoji)
+}
+if cfg.includeShortCode {
+    parts.append("[\(level.shortCode)]")
+}
+parts.append("[\(category.name)]")
+parts.append(message)
+
+if cfg.includeFileAndLineNumber {
+    let fileName = (file as NSString).lastPathComponent
+    parts.append("— \(fileName):\(line)")
+}
+
+formatted = parts.joined(separator: " ")
+```
+
+### Custom formatters
+
+For maximum performance, keep custom formatters simple:
+
+```swift
+// Fast - minimal string operations
+let config = LogConfiguration(
+    formatter: { context in
+        "[\(context.level.shortCode)] \(context.message)"
+    }
+)
+
+// Slower - complex formatting
+let config = LogConfiguration(
+    formatter: { context in
+        let timestamp = DateFormatter.localizedString(
+            from: context.timestamp,
+            dateStyle: .medium,
+            timeStyle: .medium
+        )
+        return "\(timestamp) | \(context.level.name.uppercased()) | \(context.category.name) | \(context.message) | \(context.file):\(context.line)"
+    }
+)
+```
+
+<Tip>
+Disable timestamp formatting in production if you don't need it: `LogConfiguration(includeTimestamp: false)`
+</Tip>
+
+### Date formatting
+
+Scribe reuses a single `DateFormatter` instance:
+
+```swift
+private let dateFormatter: DateFormatter
+
+private init() {
+    dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = _configuration.dateFormat
+    // ...
+}
+```
+
+Date format changes update the shared formatter:
+
+```swift
+public func setConfiguration(_ cfg: LogConfiguration) {
+    logQueue.async {
+        self._configuration = cfg
+        self.dateFormatter.dateFormat = cfg.dateFormat  // Update shared formatter
+        // ...
+    }
+}
+```
+
+## Sink performance
+
+Sinks add overhead since they receive every formatted log message.
+
+### Sink dispatch
+
+```swift
+private func dispatch(_ message: String, category: LogCategory) {
+    for (subscription, callback) in sinks where subscription.categories?.contains(category) ?? true {
+        callback(message)
+    }
+    
+    for (subscription, continuation) in streamContinuations
+        where subscription.categories?.contains(category) ?? true {
+        continuation.yield(message)
+    }
+}
+```
+
+Each sink callback executes synchronously on the logging queue.
+
+### Sink best practices
+
+**Keep callbacks fast:**
+```swift
+// Good - quick operation
+LogManager.shared.addSink { line in
+    logBuffer.append(line)  // Fast in-memory append
+}
+
+// Bad - slow operation blocks logging queue
+LogManager.shared.addSink { line in
+    try? line.write(to: fileURL, atomically: true, encoding: .utf8)  // Slow disk I/O
+}
+```
+
+**Offload work to another queue:**
+```swift
+LogManager.shared.addSink { line in
+    DispatchQueue.global(qos: .background).async {
+        try? line.write(to: fileURL, atomically: true, encoding: .utf8)
+    }
+}
+```
+
+**Remove sinks when done:**
+```swift
+let sinkID = LogManager.shared.addSink { line in
+    testBuffer.append(line)
+}
+
+// After test completes
+LogManager.shared.removeSink(sinkID)
+```
+
+<Warning>
+Slow sink callbacks will block all logging. Always offload expensive operations to another queue.
+</Warning>
+
+## Benchmarking recommendations
+
+### Measure in production scenarios
+
+```swift
+import os.signpost
+
+let log = OSLog(subsystem: "com.example.app", category: "Performance")
+
+os_signpost(.begin, log: log, name: "Heavy Logging")
+
+for i in 0..<1000 {
+    Log.debug("Iteration \(i)", category: .perf)
+}
+
+os_signpost(.end, log: log, name: "Heavy Logging")
+```
+
+### Production configuration
+
+A well-optimized production configuration:
+
+```swift
+#if DEBUG
+LogManager.shared.minimumLevel = .debug
+LogManager.shared.configuration = .default
+#else
+LogManager.shared.minimumLevel = .info
+LogManager.shared.configuration = LogConfiguration(
+    enabledCategories: nil,  // All categories (fastest)
+    includeTimestamp: false,  // Skip timestamp formatting
+    includeEmoji: true,
+    autoLoggerCacheLimit: 50
+)
+#endif
+```
+
+<Tip>
+Profile your app with Instruments to identify logging bottlenecks. Look for time spent in the logging queue.
+</Tip>

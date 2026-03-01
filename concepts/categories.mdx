@@ -1,0 +1,452 @@
+---
+title: Categories
+description: Organize and filter logs using LogCategory for better debugging and analysis
+---
+
+Categories in Scribe provide a way to group logs under shared, identifiable names. They enable fine-grained filtering in Console.app, Xcode, and custom sinks.
+
+## What is a LogCategory?
+
+`LogCategory` is a lightweight, strongly-typed wrapper around a category name:
+
+```swift
+public struct LogCategory: Sendable, Hashable {
+    public init(_ name: String)
+    public let name: String
+}
+```
+
+Each category maps to its own `Logger` instance under the same subsystem, allowing Console.app and Xcode to provide first-class category filtering.
+
+## Automatic categories
+
+When you omit the `category` parameter, Scribe automatically generates a category based on the current file:
+
+```swift
+// In ViewController.swift
+Log.info("View loaded")
+// Category: "ViewController.swift"
+
+// In NetworkManager.swift
+Log.error("Connection failed")
+// Category: "NetworkManager.swift"
+```
+
+This provides basic categorization without any setup, but for better organization across multiple files, define reusable categories.
+
+<Warning>
+  Auto-generated categories use the full file path internally. Only the last path component (filename) is displayed in logs.
+</Warning>
+
+## Defining reusable categories
+
+The recommended approach is to extend `LogCategory` with static properties:
+
+```swift
+extension LogCategory {
+    static let app = LogCategory("App")
+    static let network = LogCategory("Network")
+    static let auth = LogCategory("Auth")
+    static let database = LogCategory("Database")
+    static let ui = LogCategory("UI")
+}
+```
+
+This provides several benefits:
+
+- **Consistency**: The same category is used across all files
+- **Type safety**: Autocomplete prevents typos
+- **Refactoring**: Easy to rename categories across the codebase
+- **Discoverability**: All categories are defined in one place
+
+## Using categories
+
+### With the Log API
+
+Pass the category to any `Log` function:
+
+```swift
+import Scribe
+
+extension LogCategory {
+    static let network = LogCategory("Network")
+}
+
+func fetchData() {
+    Log.api("GET /users", category: .network)
+    
+    // ... perform request ...
+    
+    Log.success("Received 150 users", category: .network)
+}
+```
+
+### With LogManager
+
+For direct access to `LogManager`:
+
+```swift
+LogManager.shared.log(
+    "Database connection opened",
+    level: .info,
+    category: .database
+)
+```
+
+### With the @Loggable macro
+
+The `@Loggable` macro automatically generates a `log` property with a custom category:
+
+```swift
+// Using type name as category
+@Loggable
+struct TokenManager {
+    func refresh() {
+        log.info("Refreshing token")
+        // Category: "TokenManager"
+    }
+}
+
+// Using custom category name
+@Loggable("Auth")
+struct AuthService {
+    func signIn() {
+        log.info("User signing in")
+        // Category: "Auth"
+    }
+}
+
+// Using existing LogCategory
+extension LogCategory {
+    static let network = LogCategory("Network")
+}
+
+@Loggable(category: .network)
+class APIClient {
+    func request() {
+        log.api("Sending request")
+        // Category: "Network"
+    }
+}
+```
+
+## Category filtering
+
+### Filtering in configuration
+
+Restrict logging to specific categories using `LogConfiguration`:
+
+```swift
+extension LogCategory {
+    static let app = LogCategory("App")
+    static let network = LogCategory("Network")
+    static let auth = LogCategory("Auth")
+    static let database = LogCategory("Database")
+}
+
+// Only log these categories
+let config = LogConfiguration(
+    enabledCategories: [.network, .auth, .database]
+)
+LogManager.shared.configuration = config
+
+// These will be logged:
+Log.info("Connection opened", category: .network)
+Log.auth("User authenticated", category: .auth)
+
+// This will NOT be logged:
+Log.info("App started", category: .app)
+```
+
+### Allowing all categories
+
+To disable category filtering and allow all categories:
+
+```swift
+let config = LogConfiguration(enabledCategories: nil)
+LogManager.shared.configuration = config
+```
+
+<Note>
+  When `enabledCategories` is `nil`, all categories are logged. This is the default behavior.
+</Note>
+
+## Filtering in sinks
+
+Sinks can filter by specific categories:
+
+```swift
+extension LogCategory {
+    static let analytics = LogCategory("Analytics")
+    static let metrics = LogCategory("Metrics")
+}
+
+// Only receive analytics and metrics logs
+let sinkID = LogManager.shared.addSink(
+    categories: [.analytics, .metrics]
+) { line in
+    RemoteLogger.send(line)
+}
+```
+
+### Streaming with category filter
+
+Use async streams with category filtering:
+
+```swift
+let stream = LogManager.shared.stream(categories: [.network, .api])
+
+Task {
+    for await line in stream {
+        // Only receives network and API logs
+        print("Network log:", line)
+    }
+}
+```
+
+## Console.app and Xcode filtering
+
+Each `LogCategory` creates its own `Logger` instance under the app's bundle identifier subsystem. This enables native filtering in Apple's debugging tools:
+
+### In Console.app
+
+1. Open Console.app
+2. Filter by subsystem: `subsystem:com.yourapp.bundleid`
+3. Filter by category: `category:Network`
+4. Combine filters: `subsystem:com.yourapp.bundleid AND category:Network`
+
+### In Xcode
+
+1. Run your app
+2. Open the Debug Console
+3. Click the filter icon
+4. Select "Subsystem" and enter your bundle identifier
+5. Select "Category" and enter the category name
+
+<Tip>
+  Use descriptive category names that clearly indicate the module or feature being logged.
+</Tip>
+
+## Organizing categories
+
+### By feature
+
+```swift
+extension LogCategory {
+    static let authentication = LogCategory("Authentication")
+    static let userProfile = LogCategory("UserProfile")
+    static let payments = LogCategory("Payments")
+    static let notifications = LogCategory("Notifications")
+}
+```
+
+### By layer
+
+```swift
+extension LogCategory {
+    static let ui = LogCategory("UI")
+    static let business = LogCategory("Business")
+    static let data = LogCategory("Data")
+    static let network = LogCategory("Network")
+}
+```
+
+### By module
+
+```swift
+extension LogCategory {
+    static let core = LogCategory("Core")
+    static let utils = LogCategory("Utils")
+    static let extensions = LogCategory("Extensions")
+    static let testing = LogCategory("Testing")
+}
+```
+
+## Advanced patterns
+
+### Hierarchical categories
+
+While `LogCategory` doesn't have built-in hierarchy support, you can use naming conventions:
+
+```swift
+extension LogCategory {
+    static let networkHTTP = LogCategory("Network.HTTP")
+    static let networkWebSocket = LogCategory("Network.WebSocket")
+    static let networkCache = LogCategory("Network.Cache")
+}
+
+// Filter using string matching in sinks
+let sinkID = LogManager.shared.addSink { line in
+    if line.contains("Network.") {
+        // Handle all network-related logs
+    }
+}
+```
+
+### Environment-specific categories
+
+```swift
+extension LogCategory {
+    static var analytics: LogCategory {
+        #if DEBUG
+        return LogCategory("Analytics.Debug")
+        #else
+        return LogCategory("Analytics.Production")
+        #endif
+    }
+}
+```
+
+### Feature flag categories
+
+```swift
+extension LogCategory {
+    static func feature(_ name: String) -> LogCategory {
+        LogCategory("Feature.\(name)")
+    }
+}
+
+Log.info("New checkout flow started", category: .feature("NewCheckout"))
+```
+
+## Logger caching
+
+Scribe caches `Logger` instances for performance:
+
+- **Custom categories**: Cached permanently (e.g., `LogCategory("Network")`)
+- **Auto-generated categories**: Cached with LRU eviction (default limit: 100)
+
+```swift
+// Check current cache size
+let cacheSize = LogManager.shared.loggerCacheCount
+
+// Configure auto-generated cache limit
+let config = LogConfiguration(autoLoggerCacheLimit: 50)
+LogManager.shared.configuration = config
+
+// Clear all cached loggers
+LogManager.shared.clearLoggerCache()
+```
+
+<Warning>
+  Setting `autoLoggerCacheLimit` to `nil` disables cache limits, which may cause unbounded memory growth in apps with many unique file paths.
+</Warning>
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Define once, use everywhere" icon="code">
+    Create static properties on `LogCategory` extension for reusable categories
+  </Card>
+  
+  <Card title="Use descriptive names" icon="tag">
+    Choose clear, searchable names like "Authentication" instead of "Auth1"
+  </Card>
+  
+  <Card title="Align with architecture" icon="sitemap">
+    Structure categories to match your app's layers, features, or modules
+  </Card>
+  
+  <Card title="Filter in production" icon="filter">
+    Use `enabledCategories` to reduce noise and focus on important logs
+  </Card>
+</CardGroup>
+
+## Examples
+
+### Complete app setup
+
+```swift
+import Scribe
+
+// Define categories
+extension LogCategory {
+    static let app = LogCategory("App")
+    static let auth = LogCategory("Auth")
+    static let network = LogCategory("Network")
+    static let database = LogCategory("Database")
+    static let ui = LogCategory("UI")
+}
+
+// Configure logging at app launch
+@main
+struct MyApp: App {
+    init() {
+        #if DEBUG
+        // Log everything in development
+        LogManager.shared.minimumLevel = .trace
+        let config = LogConfiguration(enabledCategories: nil)
+        #else
+        // Production: only warnings and above, specific categories
+        LogManager.shared.minimumLevel = .warning
+        let config = LogConfiguration(
+            enabledCategories: [.app, .auth, .network]
+        )
+        #endif
+        
+        LogManager.shared.configuration = config
+        Log.info("App launched", category: .app)
+    }
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+```
+
+### Module-specific logging
+
+```swift
+// NetworkModule.swift
+import Scribe
+
+extension LogCategory {
+    static let network = LogCategory("Network")
+}
+
+@Loggable(category: .network)
+class NetworkClient {
+    func request(_ endpoint: String) {
+        log.api("Request: \(endpoint)")
+        
+        // ... perform request ...
+        
+        log.success("Response received")
+    }
+}
+```
+
+### Testing with categories
+
+```swift
+import XCTest
+import Scribe
+
+class NetworkTests: XCTestCase {
+    func testNetworkLogging() {
+        let expectation = XCTestExpectation(description: "Log captured")
+        
+        // Only capture network logs
+        let sinkID = LogManager.shared.addSink(
+            categories: [.network]
+        ) { line in
+            if line.contains("Request sent") {
+                expectation.fulfill()
+            }
+        }
+        
+        NetworkClient().request("/users")
+        
+        wait(for: [expectation], timeout: 1.0)
+        LogManager.shared.removeSink(sinkID)
+    }
+}
+```
+
+## See also
+
+- [Log levels](/concepts/log-levels) - Understand severity and domain levels
+- [Configuration](/concepts/configuration) - Customize log output and filtering
+- [Quick start](/quickstart) - Basic logging examples

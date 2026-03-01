@@ -1,0 +1,506 @@
+---
+title: Filtering
+description: Control which logs are displayed using minimum level filtering and category filtering
+---
+
+Scribe provides two powerful filtering mechanisms: minimum level filtering and category filtering. Use these to reduce noise, improve performance, and focus on relevant logs.
+
+## Minimum level filtering
+
+Set a minimum log level threshold. Messages below this level are completely ignored:
+
+```swift
+// Show only info and above (hides trace, debug, print)
+LogManager.shared.minimumLevel = .info
+
+Log.trace("This will be hidden")
+Log.debug("This will be hidden too")
+Log.info("This will be shown")
+Log.error("This will be shown")
+```
+
+### Common configurations
+
+<CodeGroup>
+```swift Development
+// Show everything including trace and debug
+LogManager.shared.minimumLevel = .trace
+```
+
+```swift Staging
+// Show info and above
+LogManager.shared.minimumLevel = .info
+```
+
+```swift Production
+// Show only warnings and errors
+LogManager.shared.minimumLevel = .warning
+```
+</CodeGroup>
+
+### Level comparison
+
+Log levels are comparable. Use `LogLevel.levels(minimum:)` to see which levels will be shown:
+
+```swift
+LogManager.shared.minimumLevel = .info
+
+let visibleLevels = LogLevel.levels(minimum: .info)
+// [.info, .notice, .warning, .error, .fatal, .success, .done, 
+//  .network, .api, .security, .auth, .metric, .analytics, 
+//  .ui, .user, .database, .storage]
+```
+
+### Environment-based configuration
+
+```swift
+import Scribe
+
+@main
+struct MyApp: App {
+    init() {
+        configureLogging()
+    }
+    
+    private func configureLogging() {
+        #if DEBUG
+        LogManager.shared.minimumLevel = .trace
+        #elseif STAGING
+        LogManager.shared.minimumLevel = .info
+        #else
+        LogManager.shared.minimumLevel = .warning
+        #endif
+    }
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+```
+
+## Category filtering
+
+Restrict logging to specific categories. Logs from other categories are ignored:
+
+```swift
+extension LogCategory {
+    static let network = LogCategory("Network")
+    static let auth = LogCategory("Auth")
+    static let database = LogCategory("Database")
+}
+
+// Only show network and auth logs
+let config = LogConfiguration(
+    enabledCategories: [.network, .auth]
+)
+LogManager.shared.configuration = config
+
+Log.info("Network request", category: .network)  // Shown
+Log.info("User signed in", category: .auth)      // Shown
+Log.info("Database query", category: .database)  // Hidden
+```
+
+### Allow all categories
+
+Pass `nil` to disable category filtering:
+
+```swift
+let config = LogConfiguration(enabledCategories: nil)
+LogManager.shared.configuration = config
+
+// All categories are now shown
+```
+
+### Dynamic category filtering
+
+You can change category filters at runtime:
+
+```swift
+extension LogCategory {
+    static let network = LogCategory("Network")
+    static let database = LogCategory("Database")
+}
+
+// Start with network only
+var config = LogConfiguration(
+    enabledCategories: [.network]
+)
+LogManager.shared.configuration = config
+
+// Later, add database
+config.enabledCategories?.insert(.database)
+LogManager.shared.configuration = config
+
+// Remove network
+config.enabledCategories?.remove(.network)
+LogManager.shared.configuration = config
+
+// Allow all categories
+config.enabledCategories = nil
+LogManager.shared.configuration = config
+```
+
+## Combining filters
+
+Minimum level and category filtering work together:
+
+```swift
+extension LogCategory {
+    static let api = LogCategory("API")
+    static let auth = LogCategory("Auth")
+}
+
+// Show only warnings and above from API and Auth categories
+LogManager.shared.minimumLevel = .warning
+
+let config = LogConfiguration(
+    enabledCategories: [.api, .auth]
+)
+LogManager.shared.configuration = config
+
+Log.debug("Debug message", category: .api)     // Hidden (below minimum)
+Log.warn("Warning", category: .api)            // Shown
+Log.error("Error", category: .auth)            // Shown
+Log.error("Error", category: .init("Other"))   // Hidden (category not enabled)
+```
+
+## Using @Loggable with filtering
+
+Combine the `@Loggable` macro with category filtering:
+
+```swift
+@Loggable
+class APIService {}
+
+@Loggable
+class DatabaseService {}
+
+@Loggable
+class CacheService {}
+
+// Only show logs from API and Database
+let config = LogConfiguration(
+    enabledCategories: [
+        APIService.logCategory,
+        DatabaseService.logCategory
+    ]
+)
+LogManager.shared.configuration = config
+```
+
+## Real-world examples
+
+### Feature flag based filtering
+
+```swift
+import Scribe
+
+class LoggingConfig {
+    static func configure() {
+        var enabledCategories: Set<LogCategory> = []
+        
+        if FeatureFlags.isEnabled(.networkLogging) {
+            enabledCategories.insert(.init("Network"))
+        }
+        
+        if FeatureFlags.isEnabled(.databaseLogging) {
+            enabledCategories.insert(.init("Database"))
+        }
+        
+        if FeatureFlags.isEnabled(.authLogging) {
+            enabledCategories.insert(.init("Auth"))
+        }
+        
+        let config = LogConfiguration(
+            enabledCategories: enabledCategories.isEmpty ? nil : enabledCategories
+        )
+        LogManager.shared.configuration = config
+    }
+}
+```
+
+### Module-specific logging
+
+```swift
+import Scribe
+
+// Define module categories
+extension LogCategory {
+    // Networking module
+    static let httpClient = LogCategory("HTTPClient")
+    static let websocket = LogCategory("WebSocket")
+    
+    // Data module
+    static let database = LogCategory("Database")
+    static let cache = LogCategory("Cache")
+    
+    // UI module
+    static let viewControllers = LogCategory("ViewControllers")
+    static let views = LogCategory("Views")
+}
+
+// Debug networking issues
+func debugNetworking() {
+    let config = LogConfiguration(
+        enabledCategories: [.httpClient, .websocket]
+    )
+    LogManager.shared.configuration = config
+    LogManager.shared.minimumLevel = .trace
+}
+
+// Debug data layer
+func debugDataLayer() {
+    let config = LogConfiguration(
+        enabledCategories: [.database, .cache]
+    )
+    LogManager.shared.configuration = config
+    LogManager.shared.minimumLevel = .debug
+}
+
+// Production: only errors
+func productionMode() {
+    let config = LogConfiguration(enabledCategories: nil)
+    LogManager.shared.configuration = config
+    LogManager.shared.minimumLevel = .error
+}
+```
+
+### User preference based filtering
+
+```swift
+import Scribe
+
+class UserSettings {
+    @UserDefault("loggingEnabled", defaultValue: true)
+    static var loggingEnabled: Bool
+    
+    @UserDefault("minimumLogLevel", defaultValue: "info")
+    static var minimumLogLevel: String
+    
+    @UserDefault("enabledCategories", defaultValue: [])
+    static var enabledCategories: [String]
+    
+    static func applyLoggingPreferences() {
+        // Set minimum level
+        if let level = LogLevel.parse(minimumLogLevel) {
+            LogManager.shared.minimumLevel = level
+        }
+        
+        // Set enabled categories
+        let categories = enabledCategories.isEmpty 
+            ? nil 
+            : Set(enabledCategories.map { LogCategory($0) })
+        
+        let config = LogConfiguration(enabledCategories: categories)
+        LogManager.shared.configuration = config
+    }
+}
+
+// Apply on app launch
+@main
+struct MyApp: App {
+    init() {
+        UserSettings.applyLoggingPreferences()
+    }
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+```
+
+### Temporary debug session
+
+```swift
+import Scribe
+
+class DebugSession {
+    private let originalLevel: LogLevel
+    private let originalConfig: LogConfiguration
+    
+    init(categories: Set<LogCategory>? = nil, minimumLevel: LogLevel = .trace) {
+        // Save current settings
+        originalLevel = LogManager.shared.minimumLevel
+        originalConfig = LogManager.shared.configuration
+        
+        // Apply debug settings
+        LogManager.shared.minimumLevel = minimumLevel
+        
+        let config = LogConfiguration(enabledCategories: categories)
+        LogManager.shared.configuration = config
+        
+        Log.info("Debug session started")
+    }
+    
+    func end() {
+        // Restore original settings
+        LogManager.shared.minimumLevel = originalLevel
+        LogManager.shared.configuration = originalConfig
+        
+        Log.info("Debug session ended")
+    }
+}
+
+// Usage
+func debugCheckoutFlow() {
+    let session = DebugSession(
+        categories: [.init("Checkout"), .init("Payment")],
+        minimumLevel: .trace
+    )
+    
+    // Perform checkout...
+    
+    session.end()
+}
+```
+
+### Testing with category filtering
+
+```swift
+import XCTest
+import Scribe
+
+class NetworkServiceTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        
+        // Only show network logs during tests
+        let config = LogConfiguration(
+            enabledCategories: [.init("Network")]
+        )
+        LogManager.shared.configuration = config
+        LogManager.shared.minimumLevel = .trace
+    }
+    
+    override func tearDown() {
+        // Reset to show all categories
+        let config = LogConfiguration(enabledCategories: nil)
+        LogManager.shared.configuration = config
+        
+        super.tearDown()
+    }
+    
+    func testNetworkRequest() {
+        // Test implementation
+    }
+}
+```
+
+## Console.app filtering
+
+Scribe's categories integrate with Console.app and Xcode's Console:
+
+<Steps>
+  <Step title="Open Console.app">
+    Launch Console.app on macOS
+  </Step>
+
+  <Step title="Filter by subsystem">
+    Enter your app's bundle identifier:
+    
+    ```
+    subsystem:com.yourcompany.yourapp
+    ```
+  </Step>
+
+  <Step title="Filter by category">
+    Add category filters:
+    
+    ```
+    subsystem:com.yourcompany.yourapp category:Network
+    ```
+  </Step>
+
+  <Step title="Combine filters">
+    Use multiple filters:
+    
+    ```
+    subsystem:com.yourcompany.yourapp category:Network OR category:Auth
+    ```
+  </Step>
+</Steps>
+
+<Note>
+Console.app filtering happens at the system level and is independent of Scribe's `enabledCategories` configuration.
+</Note>
+
+## Log level families
+
+Filter by log level family:
+
+```swift
+// Get all levels in the networking family
+let networkingLevels = LogLevel.levels(in: .networking)
+// [.network, .api]
+
+// Get all problem levels
+let problemLevels = LogLevel.allProblems
+// [.warning, .error, .fatal]
+
+// Get all noisy levels (useful for filtering)
+let noisyLevels = LogLevel.noisyLevels
+// [.trace, .debug, .print]
+```
+
+You can use these sets to configure your minimum level:
+
+```swift
+// In production, hide noisy levels
+if isProduction {
+    // Set minimum to the first non-noisy level
+    LogManager.shared.minimumLevel = .info
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Start permissive, narrow down" icon="funnel">
+    Begin with all categories enabled, then narrow to specific categories when debugging.
+  </Card>
+  
+  <Card title="Use environment-based levels" icon="layer-group">
+    Set different minimum levels for debug, staging, and production builds.
+  </Card>
+  
+  <Card title="Leverage @Loggable categories" icon="wand-magic-sparkles">
+    Use auto-generated categories from `@Loggable` for consistent filtering.
+  </Card>
+  
+  <Card title="Document category names" icon="book">
+    Create a central extension with all categories for easy reference and consistency.
+  </Card>
+</CardGroup>
+
+## Performance tips
+
+- Setting `minimumLevel` is extremely efficient—logs below the threshold are filtered before any formatting
+- Category filtering adds minimal overhead
+- Both filters short-circuit early in the logging pipeline
+- Combine filters to maximize performance in production
+
+```swift
+// Production configuration for best performance
+LogManager.shared.minimumLevel = .warning
+
+let config = LogConfiguration(
+    enabledCategories: nil  // Allow all categories
+)
+LogManager.shared.configuration = config
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Custom formatting" icon="palette" href="/guides/custom-formatting">
+    Customize log output format
+  </Card>
+  
+  <Card title="Sinks and streams" icon="pipe" href="/guides/sinks-and-streams">
+    Capture logs for testing or remote logging
+  </Card>
+</CardGroup>

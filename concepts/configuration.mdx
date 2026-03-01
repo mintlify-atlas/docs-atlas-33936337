@@ -1,0 +1,521 @@
+---
+title: Configuration
+description: Customize Scribe's logging behavior with LogConfiguration options
+---
+
+`LogConfiguration` controls how logs are formatted, filtered, and displayed throughout your app. Configure timestamp formats, category filtering, custom formatters, and cache limits.
+
+## Overview
+
+```swift
+public struct LogConfiguration: Sendable {
+    public var enabledCategories: Set<LogCategory>?
+    public var formatter: (@Sendable (FormatterContext) -> String)?
+    public var includeTimestamp: Bool
+    public var includeEmoji: Bool
+    public var includeShortCode: Bool
+    public var includeFileAndLineNumber: Bool
+    public var autoLoggerCacheLimit: Int?
+    public var dateFormat: String
+}
+```
+
+## Creating configurations
+
+### Default configuration
+
+Use the default configuration with standard formatting:
+
+```swift
+// Equivalent to LogConfiguration.default
+let config = LogConfiguration()
+LogManager.shared.configuration = config
+```
+
+Defaults:
+- Timestamps: enabled
+- Emoji: enabled
+- Short codes: disabled
+- File and line: enabled
+- All categories: allowed
+- Cache limit: 100 auto-generated loggers
+- Date format: `"yyyy-MM-dd HH:mm:ss.SSSZ"`
+
+### Built-in formatter configuration
+
+Customize individual formatting options:
+
+```swift
+let config = LogConfiguration(
+    enabledCategories: [.app, .network],
+    includeTimestamp: true,
+    includeEmoji: true,
+    includeShortCode: false,
+    includeFileAndLineNumber: true,
+    autoLoggerCacheLimit: 100,
+    dateFormat: "yyyy-MM-dd HH:mm:ss.SSSZ"
+)
+
+LogManager.shared.configuration = config
+```
+
+### Custom formatter configuration
+
+Take complete control with a custom formatter:
+
+```swift
+let config = LogConfiguration(
+    enabledCategories: nil,
+    formatter: { context in
+        let fileName = (context.file as NSString).lastPathComponent
+        return "[\(context.level.shortCode)] [\(context.category.name)] \(context.message) (\(fileName):\(context.line))"
+    },
+    autoLoggerCacheLimit: 100
+)
+
+LogManager.shared.configuration = config
+```
+
+<Note>
+  When using a custom formatter, the built-in formatting options (`includeTimestamp`, `includeEmoji`, etc.) are ignored.
+</Note>
+
+## Configuration options
+
+### Enabled categories
+
+Filter which categories are logged:
+
+```swift
+extension LogCategory {
+    static let app = LogCategory("App")
+    static let network = LogCategory("Network")
+    static let database = LogCategory("Database")
+}
+
+// Only log specific categories
+let config = LogConfiguration(
+    enabledCategories: [.app, .network]
+)
+LogManager.shared.configuration = config
+
+// These will be logged:
+Log.info("App started", category: .app)
+Log.api("GET /users", category: .network)
+
+// This will NOT be logged:
+Log.database("Query executed", category: .database)
+```
+
+To allow all categories:
+
+```swift
+let config = LogConfiguration(enabledCategories: nil)
+LogManager.shared.configuration = config
+```
+
+### Timestamps
+
+Control whether timestamps appear in log output:
+
+```swift
+// With timestamps (default)
+let config = LogConfiguration(includeTimestamp: true)
+// Output: 2025-02-04 10:15:30.123+1000 🔍 [App] Debug message — App.swift:42
+
+// Without timestamps
+let config = LogConfiguration(includeTimestamp: false)
+// Output: 🔍 [App] Debug message — App.swift:42
+```
+
+### Date format
+
+Customize the timestamp format string:
+
+```swift
+// Default format
+let config = LogConfiguration(
+    dateFormat: "yyyy-MM-dd HH:mm:ss.SSSZ"
+)
+// Output: 2025-02-04 10:15:30.123+1000
+
+// Time only
+let config = LogConfiguration(
+    dateFormat: "HH:mm:ss.SSS"
+)
+// Output: 10:15:30.123
+
+// ISO 8601 format
+let config = LogConfiguration(
+    dateFormat: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+)
+// Output: 2025-02-04T10:15:30.123+1000
+```
+
+See [Apple's Date Format Patterns](https://www.unicode.org/reports/tr35/tr35-dates.html#Date_Field_Symbol_Table) for available format symbols.
+
+### Emoji indicators
+
+Toggle emoji display in log output:
+
+```swift
+// With emoji (default)
+let config = LogConfiguration(includeEmoji: true)
+// Output: 🔍 [App] Debug message
+
+// Without emoji
+let config = LogConfiguration(includeEmoji: false)
+// Output: [App] Debug message
+```
+
+### Short codes
+
+Show three-character level codes:
+
+```swift
+// Without short codes (default)
+let config = LogConfiguration(includeShortCode: false)
+// Output: 🔍 [App] Debug message
+
+// With short codes
+let config = LogConfiguration(includeShortCode: true)
+// Output: [DBG] 🔍 [App] Debug message
+
+// Short codes only (no emoji)
+let config = LogConfiguration(
+    includeEmoji: false,
+    includeShortCode: true
+)
+// Output: [DBG] [App] Debug message
+```
+
+Short codes:
+- `TRC` - trace
+- `DBG` - debug
+- `PRT` - print
+- `INF` - info
+- `NTC` - notice
+- `WRN` - warning
+- `ERR` - error
+- `FTL` - fatal
+- `SUC` - success
+- `DON` - done
+- `NET` - network
+- `API` - api
+- And more...
+
+### File and line numbers
+
+Show source location of log statements:
+
+```swift
+// With file and line (default)
+let config = LogConfiguration(includeFileAndLineNumber: true)
+// Output: 🔍 [App] Debug message — ViewController.swift:42
+
+// Without file and line
+let config = LogConfiguration(includeFileAndLineNumber: false)
+// Output: 🔍 [App] Debug message
+```
+
+### Auto-logger cache limit
+
+Control how many auto-generated logger instances are cached:
+
+```swift
+// Default limit (100 loggers)
+let config = LogConfiguration(autoLoggerCacheLimit: 100)
+
+// Custom limit
+let config = LogConfiguration(autoLoggerCacheLimit: 50)
+
+// Unlimited cache (not recommended)
+let config = LogConfiguration(autoLoggerCacheLimit: nil)
+```
+
+Cache behavior:
+- **Custom categories** (e.g., `LogCategory("Network")`) are cached permanently
+- **Auto-generated categories** (from `#fileID`) use LRU eviction when limit is reached
+- Check cache size: `LogManager.shared.loggerCacheCount`
+- Clear cache: `LogManager.shared.clearLoggerCache()`
+
+<Warning>
+  Setting `autoLoggerCacheLimit` to `nil` disables limits and may cause unbounded memory growth in large codebases.
+</Warning>
+
+## Custom formatters
+
+### Formatter context
+
+Custom formatters receive a `FormatterContext` with all log metadata:
+
+```swift
+public struct FormatterContext: Sendable {
+    public let level: LogLevel
+    public let category: LogCategory
+    public let message: String
+    public let file: String
+    public let line: Int
+    public let timestamp: Date
+}
+```
+
+### Example formatters
+
+#### Minimal formatter
+
+```swift
+let config = LogConfiguration(
+    formatter: { context in
+        "\(context.level.emoji) \(context.message)"
+    }
+)
+// Output: 🔍 Debug message
+```
+
+#### JSON formatter
+
+```swift
+let config = LogConfiguration(
+    formatter: { context in
+        let json: [String: Any] = [
+            "timestamp": ISO8601DateFormatter().string(from: context.timestamp),
+            "level": context.level.name,
+            "category": context.category.name,
+            "message": context.message,
+            "file": (context.file as NSString).lastPathComponent,
+            "line": context.line
+        ]
+        
+        guard let data = try? JSONSerialization.data(withJSONObject: json),
+              let string = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        
+        return string
+    }
+)
+// Output: {"timestamp":"2025-02-04T10:15:30Z","level":"debug","category":"App","message":"Debug message","file":"App.swift","line":42}
+```
+
+#### Compact formatter
+
+```swift
+let config = LogConfiguration(
+    formatter: { context in
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        let time = formatter.string(from: context.timestamp)
+        let fileName = (context.file as NSString).lastPathComponent
+        
+        return "\(time) [\(context.level.shortCode)] \(context.message) (\(fileName):\(context.line))"
+    }
+)
+// Output: 10:15:30 [DBG] Debug message (App.swift:42)
+```
+
+#### Colored formatter (for terminal output)
+
+```swift
+enum ANSIColor: String {
+    case red = "\u{001B}[31m"
+    case yellow = "\u{001B}[33m"
+    case blue = "\u{001B}[34m"
+    case green = "\u{001B}[32m"
+    case reset = "\u{001B}[0m"
+}
+
+let config = LogConfiguration(
+    formatter: { context in
+        let color: ANSIColor = {
+            switch context.level.family {
+            case .problems: return .red
+            case .success: return .green
+            case .general: return .blue
+            default: return .reset
+            }
+        }()
+        
+        return "\(color.rawValue)\(context.level.emoji) [\(context.category.name)] \(context.message)\(ANSIColor.reset.rawValue)"
+    }
+)
+```
+
+## Common configurations
+
+### Development
+
+```swift
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: true,
+    includeShortCode: false,
+    includeFileAndLineNumber: true,
+    dateFormat: "HH:mm:ss.SSS"
+)
+LogManager.shared.configuration = config
+LogManager.shared.minimumLevel = .trace
+```
+
+### Production
+
+```swift
+extension LogCategory {
+    static let app = LogCategory("App")
+    static let error = LogCategory("Error")
+}
+
+let config = LogConfiguration(
+    enabledCategories: [.app, .error],
+    includeTimestamp: true,
+    includeEmoji: false,
+    includeShortCode: true,
+    includeFileAndLineNumber: true
+)
+LogManager.shared.configuration = config
+LogManager.shared.minimumLevel = .warning
+```
+
+### Testing
+
+```swift
+let config = LogConfiguration(
+    includeTimestamp: false,
+    includeEmoji: true,
+    includeFileAndLineNumber: false
+)
+LogManager.shared.configuration = config
+LogManager.shared.minimumLevel = .debug
+```
+
+### Remote logging
+
+```swift
+let config = LogConfiguration(
+    formatter: { context in
+        // Format as JSON for remote service
+        """
+        {
+            "timestamp": \(context.timestamp.timeIntervalSince1970),
+            "level": "\(context.level.name)",
+            "category": "\(context.category.name)",
+            "message": "\(context.message)",
+            "file": "\(context.file)",
+            "line": \(context.line)
+        }
+        """
+    }
+)
+LogManager.shared.configuration = config
+
+// Add sink to send to remote service
+LogManager.shared.addSink { line in
+    RemoteLogger.send(line)
+}
+```
+
+## Updating configuration
+
+Configuration can be changed at runtime:
+
+```swift
+// Set configuration synchronously
+LogManager.shared.configuration = newConfig
+
+// Or use async setter
+await LogManager.shared.setConfiguration(newConfig)
+
+// Get current configuration
+let currentConfig = LogManager.shared.configuration
+
+// Or use async getter
+LogManager.shared.getConfiguration { config in
+    print("Current config: \(config)")
+}
+```
+
+<Tip>
+  Configuration changes apply immediately to all subsequent log statements.
+</Tip>
+
+## Environment-based configuration
+
+Adjust configuration based on build environment:
+
+```swift
+import Scribe
+
+extension LogManager {
+    static func configureForEnvironment() {
+        #if DEBUG
+        // Development: verbose logging
+        let config = LogConfiguration(
+            includeTimestamp: true,
+            includeEmoji: true,
+            includeFileAndLineNumber: true,
+            dateFormat: "HH:mm:ss.SSS"
+        )
+        LogManager.shared.configuration = config
+        LogManager.shared.minimumLevel = .trace
+        #else
+        // Production: minimal logging
+        let config = LogConfiguration(
+            enabledCategories: [.app, .error],
+            includeTimestamp: true,
+            includeEmoji: false,
+            includeShortCode: true,
+            includeFileAndLineNumber: false
+        )
+        LogManager.shared.configuration = config
+        LogManager.shared.minimumLevel = .warning
+        #endif
+    }
+}
+
+// In app initialization
+@main
+struct MyApp: App {
+    init() {
+        LogManager.configureForEnvironment()
+    }
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Configure at launch" icon="rocket">
+    Set configuration in your app's initialization code before logging begins
+  </Card>
+  
+  <Card title="Use environment flags" icon="flag">
+    Different configurations for DEBUG vs RELEASE builds
+  </Card>
+  
+  <Card title="Limit categories in production" icon="filter">
+    Use `enabledCategories` to reduce log volume and noise
+  </Card>
+  
+  <Card title="Cache responsibly" icon="database">
+    Set reasonable `autoLoggerCacheLimit` values for your app's scale
+  </Card>
+</CardGroup>
+
+## Performance considerations
+
+- **Custom formatters**: Keep formatter logic fast—it runs for every log statement
+- **Timestamp formatting**: `DateFormatter` can be expensive; consider caching instances
+- **Category filtering**: Filtering happens early, before formatting—use it to reduce overhead
+- **Cache limits**: Lower limits reduce memory but may increase logger creation overhead
+
+## See also
+
+- [Log levels](/concepts/log-levels) - Understanding severity and filtering
+- [Categories](/concepts/categories) - Organizing logs by feature or module
+- [Quick start](/quickstart) - Basic setup and usage examples

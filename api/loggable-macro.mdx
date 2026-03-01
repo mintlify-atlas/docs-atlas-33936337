@@ -1,0 +1,269 @@
+---
+title: "@Loggable macro"
+description: "Automatically generate log and category properties for types"
+---
+
+## Overview
+
+The `@Loggable` macro automatically generates:
+- A `log` property (instance or static) for convenient logging
+- A `logCategory` property that categorizes logs from this type
+
+This eliminates boilerplate and ensures consistent categorization across your codebase.
+
+## Syntax
+
+```swift
+@attached(member, names: named(log), named(_log), named(logCategory))
+public macro Loggable(
+    _ name: StaticString? = nil,
+    category: LogCategory? = nil,
+    style: LogStyle = .instance
+)
+```
+
+## Parameters
+
+<ParamField path="name" type="StaticString?" default="nil">
+  Custom name for the log category. When `nil`, uses the type's name automatically.
+  
+  **Example:** `@Loggable("Network")` creates a category named "Network" instead of the type name.
+</ParamField>
+
+<ParamField path="category" type="LogCategory?" default="nil">
+  Existing `LogCategory` to use instead of creating a new one. When provided, the macro uses this category rather than generating one from the name.
+  
+  **Example:** `@Loggable(category: .network)` uses an existing category extension.
+</ParamField>
+
+<ParamField path="style" type="LogStyle" default=".instance">
+  Determines whether the `log` property is instance-based or static.
+  
+  **Options:**
+  - `.instance` - Creates an instance property (default)
+  - `.static` - Creates a static property
+</ParamField>
+
+## Log styles
+
+### Instance style (default)
+
+Usage: `@Loggable` or `@Loggable(style: .instance)`
+
+Generates:
+- An instance property `log` of type `Log`
+- A private static property `_log` shared across all instances
+- A static property `logCategory` of type `LogCategory`
+
+```swift
+@Loggable
+final class APIService {
+    func fetchProfile() {
+        log.info("Fetching profile")
+        // Uses instance property
+    }
+}
+
+// Usage
+let service = APIService()
+service.fetchProfile()
+
+// Access category
+print(APIService.logCategory.name) // "APIService"
+```
+
+### Static style
+
+Usage: `@Loggable(style: .static)`
+
+Generates:
+- A static property `log` of type `Log`
+- A static property `logCategory` of type `LogCategory`
+
+```swift
+@Loggable(style: .static)
+final class DatabaseManager {
+    static func connect() {
+        log.info("Connecting to database")
+        // Uses static property
+    }
+}
+
+// Usage
+DatabaseManager.connect()
+```
+
+## Examples
+
+### Basic usage
+
+```swift
+@Loggable
+final class Updater {
+    func fetchLatestInfo() {
+        log.info("Checking for updates...")
+        // ...
+        log.info("Finished checking for updates!")
+    }
+
+    func installUpdate() {
+        log.info("Installing update...")
+        // ...
+        log.info("Installed update, ready to relaunch!")
+    }
+}
+```
+
+**Before `@Loggable`:**
+```swift
+final class Updater {
+    func fetchLatestInfo() {
+        Log.info("Checking for updates...", category: .updater)
+        Log.info("Finished for updates!", category: .updater)
+    }
+}
+
+extension LogCategory {
+    static let updater = LogCategory("Updater")
+}
+```
+
+### Custom category name
+
+```swift
+@Loggable("Network")
+final class NetworkManager {
+    func request() {
+        log.api("GET /v1/profile")
+    }
+}
+
+// Category name is "Network", not "NetworkManager"
+print(NetworkManager.logCategory.name) // "Network"
+```
+
+### Using existing category
+
+```swift
+extension LogCategory {
+    static let network = LogCategory("Network")
+}
+
+@Loggable(category: .network)
+final class HTTPClient {
+    func send() {
+        log.info("Sending request")
+    }
+}
+
+// Uses the existing .network category
+print(HTTPClient.logCategory.name) // "Network"
+```
+
+### With structs and enums
+
+```swift
+@Loggable
+struct TokenManager {
+    func refresh() {
+        log.info("Refreshing token")
+    }
+}
+
+@Loggable
+enum AppState {
+    case launching
+    case ready
+    
+    func transition() {
+        log.info("State transitioning")
+    }
+}
+```
+
+### Static style for utility classes
+
+```swift
+@Loggable(style: .static)
+final class Analytics {
+    static func track(_ event: String) {
+        log.analytics("Event: \(event)")
+    }
+}
+
+// Use directly without instantiation
+Analytics.track("user_signup")
+```
+
+### Combining options
+
+```swift
+extension LogCategory {
+    static let storage = LogCategory("Storage")
+}
+
+@Loggable(category: .storage, style: .static)
+final class FileManager {
+    static func save() {
+        log.storage("Saving file")
+    }
+}
+```
+
+## Generated members
+
+The macro attaches the following members to your type:
+
+### Instance style generates
+
+```swift
+// Public instance property (computed)
+var log: Log { _log }
+
+// Private static property (storage)
+private static let _log: Log
+
+// Public static category
+static let logCategory: LogCategory
+```
+
+### Static style generates
+
+```swift
+// Public static property
+static let log: Log
+
+// Public static category
+static let logCategory: LogCategory
+```
+
+## Why use @Loggable?
+
+**Benefits:**
+- **No manual category definitions** - Categories are automatically created
+- **Consistent categorization** - Every log uses the correct category
+- **Less boilerplate** - No need to pass `category:` to every log statement
+- **Type-safe** - The category is tied to the type
+- **Cleaner code** - `log.info()` instead of `Log.info(..., category: .xyz)`
+
+**When to use:**
+- Classes, structs, or enums that log frequently
+- Types that benefit from dedicated log categories
+- Codebases that want consistent logging patterns
+
+**When not to use:**
+- One-off logging statements
+- Global utility functions (use `Log` directly instead)
+- When you need different categories within the same type
+
+## Compiler requirements
+
+The `@Loggable` macro requires:
+- Swift 5.9 or later (for macro support)
+- The `ScribeMacros` module included in your build
+
+## Related
+
+- [LogCategory](/api/log-category) - Understanding log categories
+- [Log](/api/log) - Static logging methods
+- [Loggable macro guide](/guides/loggable-macro) - Detailed usage patterns

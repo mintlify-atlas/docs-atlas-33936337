@@ -1,0 +1,99 @@
+---
+title: "LogSubscription"
+description: "Unique identifier for registered log subscriptions"
+---
+
+## Overview
+
+`LogSubscription` is a lightweight identifier returned when you register a sink callback or create an async stream listener. Use it to manage and remove specific subscriptions.
+
+## Type signature
+
+```swift
+public struct LogSubscription: Hashable, Sendable {
+    let id: UUID
+    let categories: Set<LogCategory>?
+}
+```
+
+## Properties
+
+<ParamField path="id" type="UUID">
+  Unique identifier for the subscription instance. Automatically generated when the subscription is created.
+</ParamField>
+
+<ParamField path="categories" type="Set<LogCategory>?">
+  Optional category filter associated with this subscription. When `nil`, the subscription receives logs from all categories. When set, only logs matching the specified categories are received.
+</ParamField>
+
+## Usage
+
+You receive a `LogSubscription` when you add a sink or create a stream. Store it to remove the subscription later.
+
+### Adding and removing a sink
+
+```swift
+// Add a sink and store the subscription
+let subscription = LogManager.shared.addSink { line in
+    print("Log:", line)
+}
+
+// Later, remove the specific sink
+LogManager.shared.removeSink(subscription)
+```
+
+### Category-filtered subscription
+
+```swift
+extension LogCategory {
+    static let network = LogCategory("Network")
+    static let auth = LogCategory("Auth")
+}
+
+// Only receive logs from specific categories
+let subscription = LogManager.shared.addSink(
+    categories: [.network, .auth]
+) { line in
+    print("Network/Auth log:", line)
+}
+
+// Remove when done
+LogManager.shared.removeSink(subscription)
+```
+
+### Using with async streams
+
+```swift
+// Create a stream for all categories
+let stream = LogManager.shared.stream()
+
+Task {
+    for await line in stream {
+        print("Stream:", line)
+    }
+}
+```
+
+```swift
+// Create a filtered stream
+let networkStream = LogManager.shared.stream(
+    categories: [.network]
+)
+
+Task {
+    for await line in networkStream {
+        // Only network logs appear here
+        print("Network:", line)
+    }
+}
+```
+
+## Thread safety
+
+`LogSubscription` conforms to `Sendable` and can be safely passed across concurrency domains. All operations on subscriptions are thread-safe.
+
+## Related
+
+- [LogManager](/api/log-manager) - Add and remove subscriptions
+- [LogCategory](/api/log-category) - Filter logs by category
+- [Sinks and streams guide](/guides/sinks-and-streams) - Learn about log subscription patterns

@@ -1,0 +1,429 @@
+---
+title: Testing with sinks
+description: Use sinks and streams to capture and assert on log output in your tests
+---
+
+## Testing with sinks
+
+Sinks provide a powerful way to capture log output in tests and verify that your code logs the expected messages at the right levels.
+
+### Basic sink test
+
+Capture log messages and assert on their content:
+
+```swift
+import XCTest
+@testable import Scribe
+
+final class MyFeatureTests: XCTestCase {
+    func testLogging() {
+        let expectation = XCTestExpectation(description: "Log captured")
+        
+        let sinkID = LogManager.shared.addSink { line in
+            XCTAssertTrue(line.contains("Test message"))
+            expectation.fulfill()
+        }
+        
+        Log.info("Test message", category: .init("Test"))
+        
+        wait(for: [expectation], timeout: 2.0)
+        LogManager.shared.removeSink(sinkID)
+    }
+}
+```
+
+<Note>
+Always remove sinks after your test completes to prevent them from affecting subsequent tests.
+</Note>
+
+### Capturing multiple messages
+
+Use a thread-safe container to collect multiple log messages:
+
+```swift
+func testMultipleLogs() {
+    final class MessageCapture: @unchecked Sendable {
+        var messages: [String] = []
+    }
+    let capture = MessageCapture()
+    
+    let sinkID = LogManager.shared.addSink { line in
+        capture.messages.append(line)
+    }
+    
+    Log.info("First message", category: .test)
+    Log.warn("Second message", category: .test)
+    Log.error("Third message", category: .test)
+    
+    // Wait for async logging
+    let expectation = XCTestExpectation(description: "Messages captured")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        expectation.fulfill()
+    }
+    wait(for: [expectation], timeout: 1.0)
+    
+    XCTAssertEqual(capture.messages.count, 3)
+    XCTAssertTrue(capture.messages[0].contains("First message"))
+    XCTAssertTrue(capture.messages[1].contains("Second message"))
+    XCTAssertTrue(capture.messages[2].contains("Third message"))
+    
+    LogManager.shared.removeSink(sinkID)
+}
+```
+
+<Warning>
+Remember that logging is asynchronous. Use expectations or delays to ensure messages are captured before asserting.
+</Warning>
+
+## Category filtering in tests
+
+Filter sinks by category to test specific subsystems:
+
+```swift
+extension LogCategory {
+    static let testAllowed = LogCategory("AllowedCategory")
+    static let testBlocked = LogCategory("BlockedCategory")
+}
+
+func testCategoryFiltering() {
+    let allowedExpectation = XCTestExpectation(description: "Allowed category logged")
+    let blockedExpectation = XCTestExpectation(description: "Blocked category not logged")
+    blockedExpectation.isInverted = true
+    
+    final class MessageCapture: @unchecked Sendable {
+        var message: String?
+    }
+    let capture = MessageCapture()
+    
+    // Only capture logs from testAllowed category
+    LogManager.shared.addSink(categories: [.testAllowed]) { message in
+        capture.message = message
+        
+        if message.contains("[AllowedCategory]") {
+            allowedExpectation.fulfill()
+        }
+        if message.contains("[BlockedCategory]") {
+            blockedExpectation.fulfill()
+        }
+    }
+    
+    Log.info("Should appear", category: .testAllowed)
+    Log.info("Should not appear", category: .testBlocked)
+    
+    wait(for: [allowedExpectation, blockedExpectation], timeout: 2.0)
+    XCTAssertNotNil(capture.message)
+    XCTAssertTrue(capture.message?.contains("Should appear") ?? false)
+}
+```
+
+## Testing with async streams
+
+For modern Swift concurrency, use async streams instead of callbacks:
+
+### Basic stream test
+
+```swift
+func testWithStream() async throws {
+    let stream = LogManager.shared.stream()
+    
+    let task = Task {
+        var messages: [String] = []
+        
+        for await line in stream {
+            messages.append(line)
+            if messages.count == 3 {
+                return messages
+            }
+        }
+        
+        return messages
+    }
+    
+    // Give stream time to start
+    try await Task.sleep(for: .milliseconds(100))
+    
+    Log.info("Message 1")
+    Log.info("Message 2")
+    Log.info("Message 3")
+    
+    let messages = await task.value
+    
+    XCTAssertEqual(messages.count, 3)
+    XCTAssertTrue(messages[0].contains("Message 1"))
+    XCTAssertTrue(messages[1].contains("Message 2"))
+    XCTAssertTrue(messages[2].contains("Message 3"))
+}
+```
+
+### Category-filtered streams
+
+```swift
+func testStreamWithCategoryFilter() async throws {
+    let stream = LogManager.shared.stream(categories: [.testAllowed])
+    
+    let task = Task {
+        var capturedMessage: String?
+        
+        for await message in stream {
+            capturedMessage = message
+            if message.contains("[AllowedCategory]") {
+                break
+            }
+        }
+        
+        return capturedMessage
+    }
+    
+    try await Task.sleep(for: .milliseconds(100))
+    
+    Log.info("Should appear", category: .testAllowed)
+    Log.info("Should not appear", category: .testBlocked)
+    
+    let message = await task.value
+    
+    XCTAssertNotNil(message)
+    XCTAssertTrue(message?.contains("Should appear") ?? false)
+    XCTAssertFalse(message?.contains("Should not appear") ?? true)
+}
+```
+
+<Tip>
+Async streams automatically clean up when the task is cancelled, making them ideal for testing.
+</Tip>
+
+## Test setup and teardown
+
+Ensure clean test state by resetting configuration and clearing caches:
+
+### Complete test setup
+
+```swift
+final class ScribeTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        
+        // Reset to default state before each test
+        Log.logger.setMinimumLevel(.debug)
+        Log.logger.setConfiguration(.default)
+        Log.logger.removeAllSinks()
+        
+        // Clear logger cache
+        let clearExpectation = XCTestExpectation(description: "Logger cache cleared")
+        Log.logger.clearLoggerCache {
+            clearExpectation.fulfill()
+        }
+        wait(for: [clearExpectation], timeout: 1.0)
+    }
+    
+    override func tearDown() {
+        // Clean up any remaining sinks
+        Log.logger.removeAllSinks()
+        super.tearDown()
+    }
+}
+```
+
+This ensures:
+- All tests start with the same configuration
+- Logger caches don't grow unbounded across tests
+- Sinks from previous tests don't interfere
+
+<Note>
+Clearing the logger cache is async, so use an expectation to wait for completion.
+</Note>
+
+## Testing configuration changes
+
+Verify configuration changes take effect:
+
+```swift
+func testConfigurationChanges() {
+    let expectation = XCTestExpectation(description: "Custom formatter called")
+    
+    let config = LogConfiguration(
+        formatter: { context in
+            expectation.fulfill()
+            return "[\(context.level.shortCode)] \(context.category.name): \(context.message)"
+        }
+    )
+    
+    Log.logger.setConfiguration(config)
+    Log.info("Test with custom formatter", category: .test)
+    
+    wait(for: [expectation], timeout: 2.0)
+}
+```
+
+### Testing minimum level filtering
+
+```swift
+func testMinimumLevelFiltering() {
+    let debugExpectation = XCTestExpectation(description: "Debug should be filtered")
+    debugExpectation.isInverted = true
+    
+    let infoExpectation = XCTestExpectation(description: "Info should pass")
+    
+    LogManager.shared.addSink { line in
+        if line.contains("Debug message") {
+            debugExpectation.fulfill()
+        }
+        if line.contains("Info message") {
+            infoExpectation.fulfill()
+        }
+    }
+    
+    // Set minimum level to info
+    Log.logger.setMinimumLevel(.info)
+    
+    Log.debug("Debug message")  // Should be filtered
+    Log.info("Info message")     // Should pass
+    
+    wait(for: [debugExpectation, infoExpectation], timeout: 2.0)
+}
+```
+
+## Testing concurrent logging
+
+Verify thread safety with concurrent log calls:
+
+```swift
+func testConcurrentLogging() {
+    let expectation = XCTestExpectation(description: "Concurrent logging completes")
+    expectation.expectedFulfillmentCount = 10
+    
+    // Log from multiple threads simultaneously
+    for i in 0..<10 {
+        DispatchQueue.global(qos: .background).async {
+            Log.info("Background thread message \(i)")
+            Log.debug("Debug from thread \(i)")
+            Log.error("Error from thread \(i)")
+            expectation.fulfill()
+        }
+    }
+    
+    // Also log from main thread
+    Log.info("Main thread message")
+    Log.success("Main thread success")
+    
+    wait(for: [expectation], timeout: 5.0)
+}
+```
+
+<Tip>
+Concurrent logging tests verify thread safety but don't assert on message content since order isn't guaranteed.
+</Tip>
+
+## Testing with @Loggable macro
+
+Test types using the `@Loggable` macro:
+
+```swift
+@Loggable
+struct UserService {
+    func login(username: String) {
+        log.info("Login attempt for user: \(username)")
+    }
+}
+
+func testLoggableMacro() {
+    let expectation = XCTestExpectation(description: "Loggable macro logs")
+    
+    LogManager.shared.addSink { line in
+        if line.contains("Login attempt") && line.contains("testuser") {
+            expectation.fulfill()
+        }
+    }
+    
+    let service = UserService()
+    service.login(username: "testuser")
+    
+    wait(for: [expectation], timeout: 2.0)
+}
+```
+
+## Real-world test examples
+
+From the Scribe test suite:
+
+### Testing logger cache eviction
+
+```swift
+func testLoggerCacheEviction() {
+    let logExpectation = XCTestExpectation(description: "Logs processed with eviction")
+    logExpectation.expectedFulfillmentCount = 3
+    
+    let sinkID = Log.logger.addSink { _ in
+        logExpectation.fulfill()
+    }
+    
+    // Set cache limit to 2
+    let configApplied = XCTestExpectation(description: "Configuration applied")
+    Log.logger.setConfiguration(LogConfiguration(autoLoggerCacheLimit: 2))
+    Log.logger.getConfiguration { cfg in
+        if cfg.autoLoggerCacheLimit == 2 {
+            configApplied.fulfill()
+        }
+    }
+    wait(for: [configApplied], timeout: 1.0)
+    
+    // Log from 3 different categories
+    Log.info("One", category: .init("Cat1", isAutoGenerated: true))
+    Log.info("Two", category: .init("Cat2", isAutoGenerated: true))
+    Log.info("Three", category: .init("Cat3", isAutoGenerated: true))
+    
+    wait(for: [logExpectation], timeout: 2.0)
+    
+    // Cache should only hold 2 loggers (LRU eviction)
+    XCTAssertEqual(Log.logger.loggerCacheCount, 2)
+    
+    Log.logger.removeSink(sinkID)
+}
+```
+
+### Testing auto-category name sanitization
+
+```swift
+func testAutoCategoryNameSanitization() {
+    let expectation = XCTestExpectation(description: "Auto category sanitized")
+    
+    let sinkID = Log.logger.addSink { line in
+        // Should only contain filename, not full path
+        if line.contains("[FontLibrary.swift]") {
+            XCTAssertFalse(line.contains("Scribe/FontLibrary.swift"))
+            expectation.fulfill()
+        }
+    }
+    
+    Log.info(
+        "Test auto category",
+        category: .init("Scribe/FontLibrary.swift", isAutoGenerated: true)
+    )
+    
+    wait(for: [expectation], timeout: 1.0)
+    Log.logger.removeSink(sinkID)
+}
+```
+
+<Tip>
+Study the Scribe test suite at `Tests/Scribe/ScribeTests.swift` for more comprehensive testing examples.
+</Tip>
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Always clean up" icon="broom">
+    Remove sinks and reset configuration in `tearDown()` to prevent test interference
+  </Card>
+  
+  <Card title="Use expectations" icon="clock">
+    Wait for async logging to complete before asserting on captured messages
+  </Card>
+  
+  <Card title="Test error paths" icon="triangle-exclamation">
+    Verify that error conditions log the expected error messages at the right levels
+  </Card>
+  
+  <Card title="Prefer streams" icon="water">
+    Use async streams for cleaner test code with modern Swift concurrency
+  </Card>
+</CardGroup>

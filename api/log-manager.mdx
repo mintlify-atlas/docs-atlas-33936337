@@ -1,0 +1,400 @@
+---
+title: LogManager
+description: Central logging manager that handles log routing, filtering, and output
+---
+
+## Overview
+
+The `LogManager` class is the central logging manager that handles log routing, filtering, and output. Access the shared instance via `LogManager.shared` or through `Log.logger`.
+
+Configure minimum log levels, category filters, and custom formatters to control output.
+
+```swift
+// Set minimum level
+LogManager.shared.minimumLevel = .info
+
+// Add a sink for test capture
+let sinkID = LogManager.shared.addSink { line in
+    print("Captured:", line)
+}
+
+// Remove specific sink when done
+LogManager.shared.removeSink(sinkID)
+```
+
+## Static properties
+
+### shared
+
+The shared singleton instance of `LogManager`.
+
+```swift
+public static let shared: LogManager
+```
+
+<ResponseField name="shared" type="LogManager">
+  The singleton instance used throughout the application
+</ResponseField>
+
+#### Example
+
+```swift
+LogManager.shared.minimumLevel = .warning
+```
+
+## Instance properties
+
+### minimumLevel
+
+The minimum log level threshold. Messages below this level are ignored.
+
+This property is thread-safe for both reading and writing.
+
+```swift
+public var minimumLevel: LogLevel { get set }
+```
+
+<ResponseField name="minimumLevel" type="LogLevel">
+  The minimum level for messages to be processed. Defaults to `.debug`.
+</ResponseField>
+
+#### Example
+
+```swift
+// Only log warnings and above
+LogManager.shared.minimumLevel = .warning
+
+// Check current level
+if LogManager.shared.minimumLevel == .debug {
+    print("Debug logging is enabled")
+}
+```
+
+### configuration
+
+Current logging configuration.
+
+This property is thread-safe for both reading and writing. For bulk configuration changes, prefer `setConfiguration(_:)`.
+
+```swift
+public var configuration: LogConfiguration { get set }
+```
+
+<ResponseField name="configuration" type="LogConfiguration">
+  The current configuration controlling log formatting and filtering
+</ResponseField>
+
+#### Example
+
+```swift
+// Update configuration
+var config = LogManager.shared.configuration
+config.includeTimestamp = false
+config.includeEmoji = true
+LogManager.shared.configuration = config
+```
+
+### sinkCount
+
+The number of currently registered sinks.
+
+```swift
+public var sinkCount: Int { get }
+```
+
+<ResponseField name="sinkCount" type="Int">
+  The count of active log sinks
+</ResponseField>
+
+#### Example
+
+```swift
+print("Active sinks: \(LogManager.shared.sinkCount)")
+```
+
+### loggerCacheCount
+
+The number of cached `Logger` instances keyed by category.
+
+```swift
+public var loggerCacheCount: Int { get }
+```
+
+<ResponseField name="loggerCacheCount" type="Int">
+  The count of cached Logger instances
+</ResponseField>
+
+#### Example
+
+```swift
+print("Cached loggers: \(LogManager.shared.loggerCacheCount)")
+```
+
+## Configuration methods
+
+### setConfiguration(_:)
+
+Sets the logging configuration asynchronously.
+
+```swift
+public func setConfiguration(_ cfg: LogConfiguration)
+```
+
+<ParamField path="cfg" type="LogConfiguration" required>
+  The new configuration to apply
+</ParamField>
+
+#### Example
+
+```swift
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: false,
+    includeShortCode: true
+)
+LogManager.shared.setConfiguration(config)
+```
+
+### getConfiguration(_:)
+
+Retrieves the current configuration asynchronously.
+
+```swift
+public func getConfiguration(_ completion: @escaping @Sendable (LogConfiguration) -> ())
+```
+
+<ParamField path="completion" type="(LogConfiguration) -> ()" required>
+  Closure called with the current configuration
+</ParamField>
+
+#### Example
+
+```swift
+LogManager.shared.getConfiguration { config in
+    print("Timestamp enabled: \(config.includeTimestamp)")
+}
+```
+
+### setMinimumLevel(_:)
+
+Sets the minimum log level asynchronously.
+
+```swift
+public func setMinimumLevel(_ level: LogLevel)
+```
+
+<ParamField path="level" type="LogLevel" required>
+  The minimum level for log messages to be processed
+</ParamField>
+
+#### Example
+
+```swift
+LogManager.shared.setMinimumLevel(.info)
+```
+
+### getMinimumLevel(_:)
+
+Retrieves the current minimum log level asynchronously.
+
+```swift
+public func getMinimumLevel(_ completion: @escaping @Sendable (LogLevel) -> ())
+```
+
+<ParamField path="completion" type="(LogLevel) -> ()" required>
+  Closure called with the current minimum level
+</ParamField>
+
+#### Example
+
+```swift
+LogManager.shared.getMinimumLevel { level in
+    print("Minimum level: \(level.name)")
+}
+```
+
+## Sink methods
+
+### addSink(categories:_:)
+
+Adds a sink to receive formatted log messages.
+
+Sinks are useful for capturing logs in tests, writing to files, or forwarding to remote services.
+
+```swift
+@discardableResult
+public func addSink(
+    categories: Set<LogCategory>? = nil,
+    _ callback: @Sendable @escaping (String) -> ()
+) -> LogSubscription
+```
+
+<ParamField path="categories" type="Set<LogCategory>?" default="nil">
+  Specific categories of log messages to receive. If `nil`, the callback is triggered for all formatted messages.
+</ParamField>
+
+<ParamField path="callback" type="(String) -> ()" required>
+  Closure called with each formatted log line
+</ParamField>
+
+<ResponseField name="return" type="LogSubscription">
+  A subscription that can be used to remove this specific sink later
+</ResponseField>
+
+#### Example
+
+```swift
+// Capture all logs
+let allLogsSink = LogManager.shared.addSink { line in
+    print("LOG: \(line)")
+}
+
+// Capture only specific categories
+let authCategory = LogCategory("Auth")
+let authSink = LogManager.shared.addSink(categories: [authCategory]) { line in
+    sendToAnalytics(line)
+}
+```
+
+### removeSink(_:)
+
+Removes a specific sink by its identifier.
+
+```swift
+public func removeSink(_ id: LogSubscription)
+```
+
+<ParamField path="id" type="LogSubscription" required>
+  The subscription returned when the sink was added
+</ParamField>
+
+#### Example
+
+```swift
+let sinkID = LogManager.shared.addSink { _ in }
+LogManager.shared.removeSink(sinkID)
+```
+
+### removeAllSinks()
+
+Removes all registered sinks.
+
+```swift
+public func removeAllSinks()
+```
+
+#### Example
+
+```swift
+LogManager.shared.removeAllSinks()
+```
+
+## Streaming methods
+
+### stream(categories:)
+
+Creates and returns a stream to receive formatted log messages.
+
+Similar to sinks, these are useful for capturing logs in tests, writing to files, or forwarding to remote services.
+
+```swift
+public func stream(categories: Set<LogCategory>? = nil) -> AsyncStream<String>
+```
+
+<ParamField path="categories" type="Set<LogCategory>?" default="nil">
+  Specific categories of log messages to receive. If `nil`, the stream receives all formatted messages.
+</ParamField>
+
+<ResponseField name="return" type="AsyncStream<String>">
+  An AsyncStream that will stream formatted log messages
+</ResponseField>
+
+#### Example
+
+```swift
+Task {
+    let logStream = LogManager.shared.stream()
+    for await line in logStream {
+        print("Streamed log: \(line)")
+    }
+}
+```
+
+## Cache management methods
+
+### clearLoggerCache(completion:)
+
+Clears all cached `Logger` instances, useful to prevent unbounded growth when using many dynamic categories.
+
+```swift
+public func clearLoggerCache(completion: (@Sendable () -> ())? = nil)
+```
+
+<ParamField path="completion" type="() -> ()?" default="nil">
+  Optional callback invoked after the cache has been cleared
+</ParamField>
+
+#### Example
+
+```swift
+LogManager.shared.clearLoggerCache {
+    print("Logger cache cleared")
+}
+```
+
+## Logging methods
+
+### log(_:level:category:file:function:line:)
+
+Logs a message with the specified level and metadata.
+
+This method is called by the `Log` static helpers. You generally don't need to call it directly.
+
+```swift
+public func log(
+    _ message: String,
+    level: LogLevel,
+    category: LogCategory,
+    file: String = #file,
+    function: String = #function,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The log message content
+</ParamField>
+
+<ParamField path="level" type="LogLevel" required>
+  The severity/type of the log message
+</ParamField>
+
+<ParamField path="category" type="LogCategory" required>
+  A category string for filtering and grouping logs
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  Source file path (automatically captured)
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  Source function name (automatically captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  Source line number (automatically captured)
+</ParamField>
+
+#### Example
+
+```swift
+LogManager.shared.log(
+    "User logged in",
+    level: .info,
+    category: LogCategory("Auth")
+)
+```
+
+## Thread safety
+
+All public properties and methods of `LogManager` are thread-safe. The implementation uses a serial dispatch queue to protect internal state.

@@ -1,0 +1,797 @@
+---
+title: Log
+description: Logging interface providing convenient methods for all log levels
+---
+
+## Overview
+
+The `Log` struct provides a category-specific logging interface with convenient methods for all log levels. Each method automatically captures source location metadata (file, function, line).
+
+This is useful when you want to use a shared logger specifically for a class, struct, or enum where writing `category: ...` in `Log.<method>` would be repetitive.
+
+```swift
+let log = Log(category: .init("Auth"))
+log.info("User signed in")
+log.error("User session expired")
+log.debug("New user registered")
+```
+
+## Initialization
+
+### init(category:)
+
+Creates a new `Log` instance for a specific category.
+
+```swift
+public init(category: LogCategory)
+```
+
+<ParamField path="category" type="LogCategory" required>
+  The category to associate with all log messages from this instance
+</ParamField>
+
+#### Example
+
+```swift
+let log = Log(category: .init("Networking"))
+```
+
+## Static properties
+
+### logger
+
+The shared `LogManager` instance used by all logging methods.
+
+```swift
+public static var logger: LogManager
+```
+
+<ResponseField name="logger" type="LogManager">
+  The shared singleton `LogManager` instance
+</ResponseField>
+
+## Instance properties
+
+### category
+
+The category associated with this log instance.
+
+```swift
+public let category: LogCategory
+```
+
+<ResponseField name="category" type="LogCategory">
+  The category for grouping and filtering logs
+</ResponseField>
+
+## Debug and development methods
+
+### debug(_:function:file:line:)
+
+Logs a debug message for development and troubleshooting.
+
+```swift
+public func debug(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+let log = Log(category: .init("Database"))
+log.debug("Query returned 42 results")
+```
+
+### trace(_:function:file:line:)
+
+Logs a trace message for detailed execution flow tracking. Use for granular debugging that's typically too verbose for regular debug builds.
+
+```swift
+public func trace(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.trace("Entering function with parameter: value")
+```
+
+### print(_:function:file:line:)
+
+Logs a print-level message as a structured replacement for `Swift.print()`.
+
+```swift
+public func print(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.print("Application started successfully")
+```
+
+## General information methods
+
+### info(_:function:file:line:)
+
+Logs an informational message about general app state or events.
+
+```swift
+public func info(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.info("User viewed product page")
+```
+
+### notice(_:function:file:line:)
+
+Logs a notice about a notable but non-critical event.
+
+```swift
+public func notice(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.notice("Cache limit reached, starting cleanup")
+```
+
+## Warnings and errors methods
+
+### warn(_:function:file:line:)
+
+Logs a warning about a potential issue that doesn't prevent operation.
+
+```swift
+public func warn(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.warn("API response time exceeded 2 seconds")
+```
+
+### error(_:function:file:line:)
+
+Logs an error that occurred but was handled.
+
+```swift
+public func error(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.error("Failed to parse JSON response")
+```
+
+### fatal(_:function:file:line:)
+
+Logs a fatal error that may cause app termination or severe malfunction.
+
+```swift
+public func fatal(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.fatal("Critical database corruption detected")
+```
+
+## Success and completion methods
+
+### success(_:function:file:line:)
+
+Logs a successful operation or outcome.
+
+```swift
+public func success(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.success("Payment processed successfully")
+```
+
+### done(_:function:file:line:)
+
+Logs task or operation completion.
+
+```swift
+public func done(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.done("Data migration completed")
+```
+
+## Network operations methods
+
+### network(_:function:file:line:)
+
+Logs network-related activity.
+
+```swift
+public func network(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.network("Connection established to server")
+```
+
+### api(_:function:file:line:)
+
+Logs API call activity (requests, responses, errors).
+
+```swift
+public func api(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.api("GET /users/123 returned 200 OK")
+```
+
+## Security and authentication methods
+
+### security(_:function:file:line:)
+
+Logs security-related events (encryption, permissions, access control).
+
+```swift
+public func security(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.security("User permissions verified")
+```
+
+### auth(_:function:file:line:)
+
+Logs authentication events (login, logout, token refresh).
+
+```swift
+public func auth(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.auth("User logged in successfully")
+```
+
+## Performance and analytics methods
+
+### metric(_:function:file:line:)
+
+Logs performance metrics (timing, memory, resource usage).
+
+```swift
+public func metric(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.metric("Query execution time: 142ms")
+```
+
+### analytics(_:function:file:line:)
+
+Logs analytics events (user behavior, feature usage).
+
+```swift
+public func analytics(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.analytics("User clicked checkout button")
+```
+
+## UI and user interaction methods
+
+### ui(_:function:file:line:)
+
+Logs UI events (view lifecycle, layout, rendering).
+
+```swift
+public func ui(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.ui("Profile view appeared")
+```
+
+### user(_:function:file:line:)
+
+Logs user actions (taps, gestures, input).
+
+```swift
+public func user(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.user("User tapped settings button")
+```
+
+## Database and storage methods
+
+### database(_:function:file:line:)
+
+Logs database operations (queries, transactions, migrations).
+
+```swift
+public func database(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.database("Migration v2.1 completed")
+```
+
+### storage(_:function:file:line:)
+
+Logs storage operations (file I/O, cache, persistence).
+
+```swift
+public func storage(
+    _ message: String,
+    function: String = #function,
+    file: String = #file,
+    line: Int = #line
+)
+```
+
+<ParamField path="message" type="String" required>
+  The message to log
+</ParamField>
+
+<ParamField path="function" type="String" default="#function">
+  The calling function (auto-captured)
+</ParamField>
+
+<ParamField path="file" type="String" default="#file">
+  The source file path (auto-captured)
+</ParamField>
+
+<ParamField path="line" type="Int" default="#line">
+  The source line number (auto-captured)
+</ParamField>
+
+#### Example
+
+```swift
+log.storage("Cache file written successfully")
+```
+
+## Usage with @Loggable macro
+
+It is recommended to use the `Log` struct alongside the `@Loggable` macro, which automatically creates the `Log` instance for you:
+
+```swift
+@Loggable
+struct TokenManager {
+    func refreshToken() {
+        log.success("New token generated")
+    }
+}
+```

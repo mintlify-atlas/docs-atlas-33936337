@@ -1,0 +1,250 @@
+---
+title: Thread safety
+description: Understanding Scribe's thread-safe logging architecture and async queue implementation
+---
+
+## Thread safety model
+
+Scribe is designed to be fully thread-safe from the ground up. All logging operations can be called safely from any thread or queue without additional synchronization.
+
+### Dedicated logging queue
+
+All logging operations are routed through a dedicated serial dispatch queue to ensure thread-safe access to internal state:
+
+```swift
+private let logQueue: DispatchQueue
+
+private init() {
+    subsystem = Bundle.main.bundleIdentifier ?? "com.kamidevs.scribe"
+    logQueue = DispatchQueue(label: "\(subsystem).logging", qos: .utility)
+    // ...
+}
+```
+
+The queue runs at `.utility` QoS (quality of service) to minimize impact on your app's main operations while ensuring logs are processed efficiently.
+
+<Note>
+The utility QoS strikes a balance between performance and responsiveness. Logging won't block your main thread or interfere with user interactions.
+</Note>
+
+### Concurrent logging from multiple threads
+
+You can safely log from any thread without worrying about race conditions:
+
+```swift
+// Main thread
+Log.info("App launched", category: .app)
+
+// Background thread
+DispatchQueue.global(qos: .background).async {
+    Log.network("Fetching data", category: .network)
+}
+
+// Another background thread
+Task {
+    Log.database("Query completed", category: .storage)
+}
+```
+
+All log calls are serialized through the internal queue, preventing data races.
+
+### Thread-safe property access
+
+Configuration properties use synchronous and asynchronous queue operations to ensure thread safety:
+
+```swift
+// Reading - blocks until current value is retrieved
+public var minimumLevel: LogLevel {
+    get { logQueue.sync { _minimumLevel } }
+    set { logQueue.async { self._minimumLevel = newValue } }
+}
+
+// Writing - queues the update asynchronously
+LogManager.shared.minimumLevel = .info
+```
+
+Reads use `sync` to return immediately with the current value, while writes use `async` to avoid blocking the caller.
+
+<Tip>
+For bulk configuration changes, prefer the async methods like `setConfiguration(_:)` to avoid unnecessary blocking.
+</Tip>
+
+## Logger caching
+
+Scribe maintains internal caches of `Logger` instances to avoid recreating them for each log call. This is a key performance optimization.
+
+### Two-tier caching strategy
+
+Scribe uses separate caches for custom and auto-generated categories:
+
+**Custom categories** (unbounded):
+```swift
+private var loggersByCategory: [LogCategory: Logger] = [:]
+```
+
+These are cached permanently since they're explicitly defined in your code:
+
+```swift
+extension LogCategory {
+    static let network = LogCategory("NetworkLayer")
+    static let auth = LogCategory("Auth")
+}
+```
+
+**Auto-generated categories** (LRU with limit):
+```swift
+private var autoLoggers: [String: Logger] = [:]
+private var autoLoggerOrder: [String] = []
+```
+
+These use `#fileID` as the category and are subject to an LRU (Least Recently Used) eviction policy:
+
+```swift
+// Uses auto-generated category from #fileID
+Log.info("Default category log")
+```
+
+### LRU eviction for auto-generated loggers
+
+The default limit for auto-generated loggers is 100. When this limit is exceeded, the least recently used logger is removed:
+
+```swift
+private func getAutoLogger(for category: LogCategory) -> Logger {
+    let key = category.name
+    
+    if let cached = autoLoggers[key] {
+        promoteAutoLoggerKey(key)  // Move to end (most recent)
+        return cached
+    }
+    
+    let logger = Logger(subsystem: subsystem, category: key)
+    autoLoggers[key] = logger
+    autoLoggerOrder.append(key)
+    enforceAutoLoggerLimit(_configuration.autoLoggerCacheLimit)
+    return logger
+}
+```
+
+<Warning>
+Unbounded auto-generated categories can cause memory growth in apps with many unique file paths. The default limit of 100 prevents this issue.
+</Warning>
+
+### Configuring cache limits
+
+Control the auto-generated logger cache limit through configuration:
+
+```swift
+// Set a custom limit
+let config = LogConfiguration(autoLoggerCacheLimit: 50)
+LogManager.shared.configuration = config
+
+// Disable the limit (not recommended)
+let unbounded = LogConfiguration(autoLoggerCacheLimit: nil)
+LogManager.shared.configuration = unbounded
+```
+
+### Clearing caches
+
+For long-running sessions or test cleanup, you can clear both caches:
+
+```swift
+LogManager.shared.clearLoggerCache { 
+    print("Cache cleared")
+}
+```
+
+This is particularly useful in test suites:
+
+```swift
+override func setUp() {
+    super.setUp()
+    let expectation = XCTestExpectation(description: "Cache cleared")
+    Log.logger.clearLoggerCache {
+        expectation.fulfill()
+    }
+    wait(for: [expectation], timeout: 1.0)
+}
+```
+
+### Checking cache size
+
+Monitor the total number of cached loggers:
+
+```swift
+let count = LogManager.shared.loggerCacheCount
+print("Cached loggers: \(count)")
+```
+
+This returns the sum of both custom and auto-generated cached loggers.
+
+## Async operations
+
+Scribe provides async methods for configuration changes that need completion handlers:
+
+### Async configuration setters
+
+```swift
+// Set configuration and wait for completion
+LogManager.shared.setConfiguration(newConfig)
+
+// Get configuration asynchronously
+LogManager.shared.getConfiguration { config in
+    print("Current config: \(config)")
+}
+
+// Set and get minimum level
+LogManager.shared.setMinimumLevel(.warning)
+
+LogManager.shared.getMinimumLevel { level in
+    print("Current level: \(level)")
+}
+```
+
+### Async streaming
+
+For modern Swift concurrency, use async streams instead of callbacks:
+
+```swift
+let stream = LogManager.shared.stream()
+
+Task {
+    for await line in stream {
+        // Process each log line as it arrives
+        await sendToRemoteServer(line)
+    }
+}
+```
+
+Streams automatically clean up when the task is cancelled:
+
+```swift
+continuation.onTermination = { @Sendable _ in
+    self.logQueue.async {
+        self.streamContinuations.removeValue(forKey: id)
+    }
+}
+```
+
+<Tip>
+Async streams are ideal for SwiftUI previews, server-side logging, and test assertions with modern Swift concurrency.
+</Tip>
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use defined categories" icon="tag">
+    Prefer explicit `LogCategory` extensions over auto-generated categories to maximize cache efficiency
+  </Card>
+  
+  <Card title="Set cache limits" icon="gauge">
+    Configure `autoLoggerCacheLimit` based on your app's file structure to prevent unbounded growth
+  </Card>
+  
+  <Card title="Clean up in tests" icon="broom">
+    Always clear logger caches in test `setUp()` methods to ensure isolated test runs
+  </Card>
+  
+  <Card title="Use async streams" icon="stream">
+    Prefer `stream()` over sinks when working with Swift concurrency for automatic cleanup
+  </Card>
+</CardGroup>

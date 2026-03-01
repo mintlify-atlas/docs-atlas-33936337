@@ -1,0 +1,537 @@
+---
+title: Custom formatting
+description: Customize log output with formatters, timestamp formats, emoji toggles, and short codes
+---
+
+Scribe provides flexible formatting options to control how logs appear. Use the built-in formatter with configuration options, or create your own custom formatter.
+
+## Default format
+
+By default, Scribe formats logs with timestamps, emoji, category, message, and source location:
+
+```text
+2026-03-01 10:15:30.123+0000 ✅ [Auth] User signed in — AuthManager.swift:42
+2026-03-01 10:15:31.456+0000 🚀 [API] GET /v1/profile — NetworkService.swift:88
+2026-03-01 10:15:32.789+0000 ⚠️ [Network] Slow response — HTTPClient.swift:156
+```
+
+The format is:
+
+```text
+[timestamp] [emoji] [category] message — file:line
+```
+
+## Built-in formatter options
+
+Customize the built-in formatter using `LogConfiguration`:
+
+### Toggle timestamps
+
+```swift
+let config = LogConfiguration(includeTimestamp: false)
+LogManager.shared.configuration = config
+```
+
+Output:
+
+```text
+✅ [Auth] User signed in — AuthManager.swift:42
+```
+
+### Toggle emoji
+
+```swift
+let config = LogConfiguration(includeEmoji: false)
+LogManager.shared.configuration = config
+```
+
+Output:
+
+```text
+2026-03-01 10:15:30.123+0000 [Auth] User signed in — AuthManager.swift:42
+```
+
+### Add short codes
+
+Short codes are three-letter level indicators (e.g., `[DBG]`, `[ERR]`, `[WRN]`):
+
+```swift
+let config = LogConfiguration(includeShortCode: true)
+LogManager.shared.configuration = config
+```
+
+Output:
+
+```text
+2026-03-01 10:15:30.123+0000 ✅ [SUC] [Auth] User signed in — AuthManager.swift:42
+```
+
+### Toggle file and line number
+
+```swift
+let config = LogConfiguration(includeFileAndLineNumber: false)
+LogManager.shared.configuration = config
+```
+
+Output:
+
+```text
+2026-03-01 10:15:30.123+0000 ✅ [Auth] User signed in
+```
+
+### Custom date format
+
+Change the timestamp format using standard date format strings:
+
+```swift
+let config = LogConfiguration(dateFormat: "HH:mm:ss")
+LogManager.shared.configuration = config
+```
+
+Output:
+
+```text
+10:15:30 ✅ [Auth] User signed in — AuthManager.swift:42
+```
+
+<Note>
+The default date format is `"yyyy-MM-dd HH:mm:ss.SSSZ"`.
+</Note>
+
+### Combining options
+
+```swift
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: false,
+    includeShortCode: true,
+    includeFileAndLineNumber: true,
+    dateFormat: "HH:mm:ss.SSS"
+)
+LogManager.shared.configuration = config
+```
+
+Output:
+
+```text
+10:15:30.123 [SUC] [Auth] User signed in — AuthManager.swift:42
+```
+
+## Common configurations
+
+<CodeGroup>
+```swift Minimal
+// Just category and message
+let config = LogConfiguration(
+    includeTimestamp: false,
+    includeEmoji: false,
+    includeFileAndLineNumber: false
+)
+LogManager.shared.configuration = config
+
+// Output: [Auth] User signed in
+```
+
+```swift Compact
+// Time, short code, and message
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: false,
+    includeShortCode: true,
+    includeFileAndLineNumber: false,
+    dateFormat: "HH:mm:ss"
+)
+LogManager.shared.configuration = config
+
+// Output: 10:15:30 [SUC] [Auth] User signed in
+```
+
+```swift Verbose
+// Everything including both emoji and short codes
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: true,
+    includeShortCode: true,
+    includeFileAndLineNumber: true
+)
+LogManager.shared.configuration = config
+
+// Output: 2026-03-01 10:15:30.123+0000 ✅ [SUC] [Auth] User signed in — AuthManager.swift:42
+```
+
+```swift Production
+// Clean format for production logs
+let config = LogConfiguration(
+    includeTimestamp: true,
+    includeEmoji: false,
+    includeShortCode: true,
+    includeFileAndLineNumber: true,
+    dateFormat: "yyyy-MM-dd HH:mm:ss.SSS"
+)
+LogManager.shared.configuration = config
+
+// Output: 2026-03-01 10:15:30.123 [SUC] [Auth] User signed in — AuthManager.swift:42
+```
+</CodeGroup>
+
+## Custom formatters
+
+For complete control, provide a custom formatter closure. The formatter receives a `FormatterContext` with all log metadata:
+
+```swift
+let config = LogConfiguration(
+    formatter: { context in
+        let fileName = (context.file as NSString).lastPathComponent
+        return "[\(context.level.shortCode)] [\(context.category.name)] \(context.message) (\(fileName):\(context.line))"
+    }
+)
+LogManager.shared.configuration = config
+```
+
+Output:
+
+```text
+[SUC] [Auth] User signed in (AuthManager.swift:42)
+```
+
+### FormatterContext
+
+The `FormatterContext` provides:
+
+```swift
+public struct FormatterContext {
+    public let level: LogLevel        // The log level
+    public let category: LogCategory  // The category
+    public let message: String        // The log message
+    public let file: String           // Full file path
+    public let line: Int              // Line number
+    public let timestamp: Date        // Log timestamp
+}
+```
+
+### Custom formatter examples
+
+<CodeGroup>
+```swift JSON format
+let config = LogConfiguration(
+    formatter: { context in
+        let fileName = (context.file as NSString).lastPathComponent
+        let timestamp = ISO8601DateFormatter().string(from: context.timestamp)
+        
+        return """
+        {"level":"\(context.level.name)","category":"\(context.category.name)",\
+        "message":"\(context.message)","file":"\(fileName)","line":\(context.line),\
+        "timestamp":"\(timestamp)"}
+        """
+    }
+)
+LogManager.shared.configuration = config
+
+// Output:
+// {"level":"success","category":"Auth","message":"User signed in","file":"AuthManager.swift","line":42,"timestamp":"2026-03-01T10:15:30Z"}
+```
+
+```swift Logfmt
+let config = LogConfiguration(
+    formatter: { context in
+        let fileName = (context.file as NSString).lastPathComponent
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ"
+        let timestamp = formatter.string(from: context.timestamp)
+        
+        return "time=\(timestamp) level=\(context.level.name) category=\(context.category.name) message=\"\(context.message)\" file=\(fileName) line=\(context.line)"
+    }
+)
+LogManager.shared.configuration = config
+
+// Output:
+// time=2026-03-01T10:15:30.123+00:00 level=success category=Auth message="User signed in" file=AuthManager.swift line=42
+```
+
+```swift Colored terminal
+import Foundation
+
+let config = LogConfiguration(
+    formatter: { context in
+        let color: String
+        switch context.level {
+        case .error, .fatal:
+            color = "\u{001B}[0;31m"  // Red
+        case .warning:
+            color = "\u{001B}[0;33m"  // Yellow
+        case .success, .done:
+            color = "\u{001B}[0;32m"  // Green
+        case .info, .notice:
+            color = "\u{001B}[0;36m"  // Cyan
+        default:
+            color = "\u{001B}[0;37m"  // White
+        }
+        let reset = "\u{001B}[0;0m"
+        
+        let fileName = (context.file as NSString).lastPathComponent
+        return "\(color)[\(context.level.shortCode)] [\(context.category.name)] \(context.message)\(reset) — \(fileName):\(context.line)"
+    }
+)
+LogManager.shared.configuration = config
+
+// Output: (with colors in terminal)
+// [SUC] [Auth] User signed in — AuthManager.swift:42
+```
+
+```swift Aligned columns
+let config = LogConfiguration(
+    formatter: { context in
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        let time = formatter.string(from: context.timestamp)
+        
+        let level = context.level.shortCode.padding(toLength: 3, withPad: " ", startingAt: 0)
+        let category = context.category.name.padding(toLength: 15, withPad: " ", startingAt: 0)
+        let fileName = (context.file as NSString).lastPathComponent
+        let location = "\(fileName):\(context.line)".padding(toLength: 30, withPad: " ", startingAt: 0)
+        
+        return "\(time) | \(level) | \(category) | \(location) | \(context.message)"
+    }
+)
+LogManager.shared.configuration = config
+
+// Output:
+// 10:15:30.123 | SUC | Auth            | AuthManager.swift:42           | User signed in
+```
+</CodeGroup>
+
+## Real-world examples
+
+### Environment-specific formatting
+
+```swift
+import Scribe
+
+class LoggingSetup {
+    static func configure() {
+        #if DEBUG
+        // Verbose format for debugging
+        let config = LogConfiguration(
+            includeTimestamp: true,
+            includeEmoji: true,
+            includeShortCode: false,
+            includeFileAndLineNumber: true,
+            dateFormat: "HH:mm:ss.SSS"
+        )
+        #elseif STAGING
+        // Balanced format for staging
+        let config = LogConfiguration(
+            includeTimestamp: true,
+            includeEmoji: false,
+            includeShortCode: true,
+            includeFileAndLineNumber: true,
+            dateFormat: "yyyy-MM-dd HH:mm:ss"
+        )
+        #else
+        // Production: machine-readable JSON
+        let config = LogConfiguration(
+            formatter: { context in
+                let encoder = JSONEncoder()
+                encoder.dateEncodingStrategy = .iso8601
+                
+                let logEntry: [String: Any] = [
+                    "timestamp": ISO8601DateFormatter().string(from: context.timestamp),
+                    "level": context.level.name,
+                    "category": context.category.name,
+                    "message": context.message,
+                    "file": (context.file as NSString).lastPathComponent,
+                    "line": context.line
+                ]
+                
+                if let data = try? JSONSerialization.data(withJSONObject: logEntry),
+                   let json = String(data: data, encoding: .utf8) {
+                    return json
+                }
+                return context.message
+            }
+        )
+        #endif
+        
+        LogManager.shared.configuration = config
+    }
+}
+```
+
+### Syslog-style formatting
+
+```swift
+import Scribe
+
+let config = LogConfiguration(
+    formatter: { context in
+        // Syslog priority based on level
+        let priority: String
+        switch context.level {
+        case .fatal: priority = "<0>"      // Emergency
+        case .error: priority = "<3>"      // Error
+        case .warning: priority = "<4>"    // Warning
+        case .notice: priority = "<5>"     // Notice
+        case .info: priority = "<6>"       // Informational
+        default: priority = "<7>"          // Debug
+        }
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM dd HH:mm:ss"
+        let timestamp = formatter.string(from: context.timestamp)
+        
+        let processName = ProcessInfo.processInfo.processName
+        let fileName = (context.file as NSString).lastPathComponent
+        
+        return "\(priority)\(timestamp) \(processName)[\(context.category.name)]: \(context.message) (\(fileName):\(context.line))"
+    }
+)
+LogManager.shared.configuration = config
+
+// Output:
+// <6>Mar 01 10:15:30 MyApp[Auth]: User signed in (AuthManager.swift:42)
+```
+
+### CloudWatch compatible format
+
+```swift
+import Scribe
+
+let config = LogConfiguration(
+    formatter: { context in
+        let timestamp = Int(context.timestamp.timeIntervalSince1970 * 1000)
+        let fileName = (context.file as NSString).lastPathComponent
+        
+        let entry: [String: Any] = [
+            "timestamp": timestamp,
+            "level": context.level.name.uppercased(),
+            "category": context.category.name,
+            "message": context.message,
+            "source": [
+                "file": fileName,
+                "line": context.line
+            ]
+        ]
+        
+        if let data = try? JSONSerialization.data(withJSONObject: entry),
+           let json = String(data: data, encoding: .utf8) {
+            return json
+        }
+        return context.message
+    }
+)
+LogManager.shared.configuration = config
+
+// Output:
+// {"timestamp":1709290530123,"level":"SUCCESS","category":"Auth","message":"User signed in","source":{"file":"AuthManager.swift","line":42}}
+```
+
+### Human-friendly narrative format
+
+```swift
+let config = LogConfiguration(
+    formatter: { context in
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm:ss a"
+        let time = formatter.string(from: context.timestamp)
+        
+        return "\(time): \(context.level.emoji) \(context.message) [\(context.category.name)]"
+    }
+)
+LogManager.shared.configuration = config
+
+// Output:
+// 10:15:30 AM: ✅ User signed in [Auth]
+```
+
+## Accessing level properties
+
+Use `LogLevel` properties in your custom formatter:
+
+```swift
+let config = LogConfiguration(
+    formatter: { context in
+        // Available properties:
+        context.level.emoji        // "✅"
+        context.level.shortCode    // "SUC"
+        context.level.name         // "success"
+        context.level.family       // .success
+        context.level.osLogType    // .info
+        
+        // Example: use different formats for different families
+        switch context.level.family {
+        case .problems:
+            return "🚨 ERROR [\(context.category.name)]: \(context.message)"
+        case .networking:
+            return "🌐 NET [\(context.category.name)]: \(context.message)"
+        default:
+            return "[\(context.category.name)]: \(context.message)"
+        }
+    }
+)
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Match your environment" icon="gear">
+    Use emoji and colors in development, structured formats in production.
+  </Card>
+  
+  <Card title="Keep formatters fast" icon="gauge-high">
+    Formatters run on every log. Avoid expensive operations like network calls.
+  </Card>
+  
+  <Card title="Use structured formats for parsing" icon="code">
+    JSON and logfmt are easy to parse by log aggregation tools.
+  </Card>
+  
+  <Card title="Include essential context" icon="circle-info">
+    Always include timestamp, level, category, and message at minimum.
+  </Card>
+</CardGroup>
+
+## Performance considerations
+
+- Custom formatters are called on Scribe's internal queue
+- Keep formatters fast—they block log processing
+- Date formatting is relatively expensive; cache `DateFormatter` instances if needed
+- The built-in formatter is optimized and caches date formatters internally
+
+```swift
+// Good: Reuse date formatter
+let dateFormatter = DateFormatter()
+dateFormatter.dateFormat = "HH:mm:ss.SSS"
+
+let config = LogConfiguration(
+    formatter: { context in
+        let time = dateFormatter.string(from: context.timestamp)
+        return "\(time) \(context.message)"
+    }
+)
+
+// Avoid: Creating date formatter on every log
+let config = LogConfiguration(
+    formatter: { context in
+        let formatter = DateFormatter()  // ❌ Expensive
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        let time = formatter.string(from: context.timestamp)
+        return "\(time) \(context.message)"
+    }
+)
+```
+
+<Warning>
+Custom formatters affect **all** log output, including logs sent to `os_log`, sinks, and streams. Choose your format carefully.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Sinks and streams" icon="pipe" href="/guides/sinks-and-streams">
+    Capture formatted logs for file writing or remote logging
+  </Card>
+  
+  <Card title="Filtering" icon="filter" href="/guides/filtering">
+    Filter logs by category and minimum level
+  </Card>
+</CardGroup>
